@@ -1,12 +1,12 @@
-<h1 style="display: flex; justify-content: center; align-items:center;">
-  <img src="./public/icon.svg" style="width: 5rem; height: 5rem; object-fit: contain; margin-right:0.5rem;" />
-  <span>Alt-Tab extension</span>
-</h1>
+![logo](./docs/logo.png)
 
+# alt-tab extension
 
 > [!WARNING]
 >
 > This extension is Working in Progress. Currently developing.
+
+[![License: MIT][license-image]][license-url]
 
 ## Overview
 
@@ -31,3 +31,6 @@ This extension is based on [Server Repository](https://github.com/knight7024/alt
 ## Contributing
 
 Will be accesible.
+
+[license-image]: https://img.shields.io/badge/License-MIT-brightgreen.svg?style=flat-square
+[license-url]: https://opensource.org/licenses/MIT
