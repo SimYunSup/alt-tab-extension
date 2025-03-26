@@ -10,17 +10,16 @@ export interface ClientTabInfo {
 }
 export interface TabInfo extends ClientTabInfo {
   device: string;
-  userId: string;
   isIncognito: boolean;
   scrollPosition?: ScrollPosition;
-  storge: {
-    session: string;
-    cookies: string;
-    local: string;
-  }
+  storge?: StorageInfo;
 }
 
-
+export interface StorageInfo {
+  session?: string;
+  cookies?: string;
+  local?: string;
+}
 
 export interface ScrollPosition {
   x: number;

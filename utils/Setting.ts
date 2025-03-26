@@ -1,10 +1,12 @@
 import type { CloseRules } from "@/types/data";
 
+import { storage } from "wxt/storage";
+
 export const SETTING_KEY = "setting";
 
 export interface Setting {
   closeRules: CloseRules;
-  device: string;
+  device?: string;
   refreshInterval: number;
   blocklist: {
     url: string;
@@ -15,7 +17,7 @@ export interface Setting {
 export const DEFAULT_SETTING: Setting = {
   closeRules: {
     idleCondition: "window",
-    idleThreshold: 10,
+    idleThreshold: 1,
     pinnedTabIgnore: false,
     mutedTabIgnore: false,
     containerTabIgnore: false,
@@ -57,3 +59,15 @@ export const DEFAULT_SETTING: Setting = {
     ] : [],
   ],
 };
+
+export async function getSetting() {
+  const _setting = await storage.getItem<Setting>(`local:${SETTING_KEY}`);
+  if (!_setting) {
+    await storage.setItem<Setting>(`local:${SETTING_KEY}`, DEFAULT_SETTING);
+  }
+  return _setting ?? DEFAULT_SETTING;
+}
+
+export function getURLSetting(setting: Setting, url: string) {
+  return setting.blocklist.find((block) => url.startsWith(block.url))?.rule ?? setting.closeRules;
+}

@@ -1,8 +1,6 @@
 import type { InactiveType, TabInfo } from "@/types/data";
 import type { Setting } from "./Setting";
 
-import { sendMessage } from "webext-bridge/background";
-
 type TabStatus = "loaded" | "unloaded";
 
 export class Tab {
@@ -16,7 +14,6 @@ export class Tab {
   constructor(
     tab: chrome.tabs.Tab,
     inactiveType: InactiveType,
-
     refreshInterval = 1000,
   ) {
     this.id = tab.id ?? chrome.tabs.TAB_ID_NONE;
@@ -104,7 +101,6 @@ export class Tab {
     } else {
       tabInfo.groupId = this.tabInstance.groupId.toString();
     }
-    tabInfo.scrollPosition = await sendMessage("get-scroll-position", { tabId: this.id });
 
     chrome.tabs.remove(this.id);
 

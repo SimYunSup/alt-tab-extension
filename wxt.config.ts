@@ -1,6 +1,7 @@
 import { defineConfig } from "wxt";
 import { patchCssModules } from "vite-css-modules"
 import tailwindcss from "@tailwindcss/vite";
+import svgr from "vite-plugin-svgr";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -14,6 +15,7 @@ export default defineConfig({
       plugins: [
         patchCssModules(),
         tailwindcss(),
+        svgr(),
       ],
     };
   },
@@ -21,8 +23,8 @@ export default defineConfig({
     browser,
   }) {
     const manifest = {
-      name: "Alt Tab - easy to autoclose tabs",
-      description: "Alt Tab is a browser extension that allows you to easily close tabs that are not active.",
+      name: "Alt Tab autoclose",
+      description: "Alt Tab - easy to autoclose tabs",
       permissions: [
         "tabs",
         "tabGroups",
@@ -42,6 +44,7 @@ export default defineConfig({
   },
   autoIcons: {
     enabled: true,
-    baseIconPath: "./public/icon.svg",
+    grayscaleOnDevelopment: false,
+    baseIconPath: "./public/icon.png",
   },
 });

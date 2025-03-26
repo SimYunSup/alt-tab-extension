@@ -13,12 +13,12 @@ import { useSetting, useTabs } from "../hooks/useBackground";
 const formatRemainingTime = (milliseconds: number) => {
   const seconds = Math.floor(milliseconds / 1000)
   if (seconds < 60) {
-    return `${seconds}s`
+    return `${seconds}초`
   } else {
     const minutes = Math.floor(seconds / 60)
     const hours = Math.floor(minutes / 60)
     const mins = minutes % 60
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m ${seconds % 60}s`
+    return hours > 0 ? `${hours}시간 ${mins}분` : `${mins}분 ${seconds % 60}초`
   }
 }
 
@@ -44,7 +44,7 @@ interface TabItemProps {
   tab: ClientTabInfo;
   selected: boolean;
   onClick: () => void;
-  setting?: Setting;
+  setting: Setting | null;
 }
 function TabItem({
   tab,
@@ -66,7 +66,7 @@ function TabItem({
   }, [now]);
 
   return (
-    <div
+    <button
     className={cn(
       "w-full flex items-center p-2 rounded-md group hover:bg-slate-100 transition-colors cursor-pointer",
       selected && "bg-slate-100",
@@ -88,7 +88,7 @@ function TabItem({
     </div>
 
     <div className="flex-1 min-w-0 mr-2">
-      <div className="text-sm font-medium text-slate-900 truncate">{tab.title}</div>
+      <div className="text-sm font-medium text-slate-900 truncate text-start">{tab.title}</div>
       <div className="flex items-center">
         <span className="text-xs text-slate-500 truncate">{tab.url}</span>
       </div>
@@ -96,13 +96,18 @@ function TabItem({
 
     <div className="flex items-center gap-1 flex-shrink-0">
       <Clock className="size-3 text-slate-400" />
-      <span
-        className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium", getTimeColor(tab.lastActiveAt, 60))}
+      {setting ? (
+        <span
+        className={cn(
+          "text-xs px-1.5 py-0.5 rounded-full font-medium",
+          tab.lastActiveAt === -1 ? "text-slate-400 bg-slate-100" : getTimeColor(tab.lastActiveAt, 60),
+        )}
       >
-        {setting ? formatRemainingTime(tab.lastActiveAt + setting.closeRules.idleThreshold * 60 * 1000 - Date.now()) : "..."}
+        {tab.lastActiveAt === -1 ? "잠금" : formatRemainingTime(tab.lastActiveAt + setting.closeRules.idleThreshold * 60 * 1000 - Date.now())}
       </span>
+      ) : null}
     </div>
-  </div>
+  </button>
   );
 }
 
@@ -110,7 +115,7 @@ export const CurrentTabs = () => {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTabs, setSelectedTabs] = React.useState<Set<string>>(new Set());
   const tabs = useTabs();
-  const setting = useSetting();
+  const [setting] = useSetting();
   const filteredTabs = React.useDeferredValue(Object.fromEntries(Object.entries(tabs).filter(([_, tabInfo]) => {
     return tabInfo.title?.toLowerCase().includes(searchQuery.toLowerCase()) ?? true;
   })));

@@ -1,27 +1,35 @@
-import { onMessage, sendMessage } from "webext-bridge/content-script";
+import { allowWindowMessaging, onMessage, sendMessage } from "webext-bridge/content-script";
 
 export default defineContentScript({
   matches: ["<all_urls>"],
-  world: "ISOLATED",
-  main(context) {
-    onMessage("get-scroll-position", async (message) => {
-      const { tabId } = message.data;
+  runAt: "document_end",
+  registration: "manifest",
+  main() {
+    allowWindowMessaging("background");
+    onMessage("get-tab-info", async () => {
       const tab = await chrome.tabs.getCurrent();
-      if (tab?.id !== tabId) {
-        return;
+      const cookies = await chrome.cookies.getAll({
+        url: tab?.url ?? "",
+       });
+      const tabInfo = {
+        storage: {
+          session: Object.keys(sessionStorage).map((key) => `${key}=${sessionStorage[key]}`).join("&"),
+          cookies: JSON.stringify(cookies),
+          local: Object.keys(localStorage).map((key) => `${key}=${localStorage[key]}`).join("&"),
+        },
+        scrollPosition: {
+          x: window.scrollX,
+          y: window.scrollY,
+        },
       }
-      const scrollPosition = {
-        x: window.scrollX,
-        y: window.scrollY,
-      };
-      return scrollPosition;
+      return tabInfo;
     });
     onMessage("refresh-interval", async (message) => {
       const { type, interval } = message.data;
       let hidden = false;
       if (type === "idle") {
         function runIdleCallback() {
-          context.requestIdleCallback(async () => {
+          window.requestIdleCallback(async () => {
             if (hidden) {
               const tab = await chrome.tabs.getCurrent();
               sendMessage("refresh-tab", { tabId: tab?.id });
