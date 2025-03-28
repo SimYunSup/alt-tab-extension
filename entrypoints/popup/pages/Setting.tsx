@@ -4,20 +4,62 @@ import { Button } from "@/entrypoints/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/entrypoints/components/ui/card"
 import { Input } from "@/entrypoints/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/entrypoints/components/ui/tabs"
-import { Save, PlusCircle, Trash2 } from "lucide-react"
+import {
+  Save,
+  PlusCircle,
+  Trash2,
+  AppWindowMacIcon,
+  RefreshCcwIcon,
+  Clock2Icon,
+  VolumeIcon,
+  PinOffIcon,
+  Loader2Icon
+} from "lucide-react"
 import { Label } from "@/entrypoints/components/ui/label"
 import { Slider } from "@/entrypoints/components/ui/slider"
 import { Separator } from "@/entrypoints/components/ui/separator"
 import { ScrollArea } from "@/entrypoints/components/ui/scroll-area"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/entrypoints/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/entrypoints/components/ui/table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/entrypoints/components/ui/table"
 import { Switch } from "@/entrypoints/components/ui/switch"
 import { useSetting } from "../hooks/useBackground"
-import { Badge } from "@/entrypoints/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/entrypoints/components/ui/tooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/entrypoints/components/ui/select"
+
+const INACTIVE_TYPE_INFO = {
+  window: {
+    label: "윈도우 변경 시",
+    description: "Chrome에서는 탭 변경 시, Firefox에서는 윈도우 변경 시 탭이 inactive 상태로 간주됩니다.",
+    icon: AppWindowMacIcon
+  },
+  visiblity: {
+    label: "탭 변경 시",
+    description: "탭 변경 시 탭이 inactive 상태로 간주됩니다.",
+    icon: RefreshCcwIcon
+  },
+  idle: {
+    label: "활동 없을 시",
+    description: "탭이 활동 없을 시 inactive 상태로 간주됩니다.",
+    icon: Clock2Icon
+  },
+} as const;
 
 export function Setting() {
-  const [_settings, set_Settings] = useSetting();
-  const [settings, setSettings] = useState(() => _settings ?? DEFAULT_SETTING);
+  const {
+    isLoading,
+    settings,
+    saveSettings,
+  } = useSetting();
+  const [_settings, setSettings] = useState(() => settings ?? DEFAULT_SETTING);
+  useEffect(() => {
+    setSettings(settings ?? DEFAULT_SETTING)
+  }, [settings]);
   const [newBlocklistItem, setNewBlocklistItem] = useState({
     url: "",
     rule: {
@@ -36,14 +78,6 @@ export function Setting() {
         ...settings.closeRules,
         [field]: value,
       },
-    })
-  }
-
-  const handleGeneralSettingChange = (field: keyof Omit<Setting, "closeRules" | "blocklist">, value: any) => {
-    if (!settings) return;
-    setSettings({
-      ...settings,
-      [field]: value,
     })
   }
 
@@ -95,11 +129,8 @@ export function Setting() {
     }
   }
 
-  const saveSettings = () => {
-    // Here you would typically save the settings to storage or send to a server
-    console.log("Saving settings:", settings)
-    // Show a success message or notification
-    alert("Settings saved successfully!")
+  const submitSettings = () => {
+    saveSettings(settings);
   }
 
   const formatTime = (minutes: number) => {
@@ -109,17 +140,6 @@ export function Setting() {
       const hours = Math.floor(minutes / 60)
       const mins = minutes % 60
       return mins > 0 ? `${hours}시간 ${mins}분` : `${hours}시간`
-    }
-  }
-
-  const getInactiveTypeLabel = (type: InactiveType) => {
-    switch (type) {
-      case "window":
-        return "윈도우 변경 시"
-      case "visiblity":
-        return "탭 숨김 시"
-      case "idle":
-        return "활동 없을 시"
     }
   }
 
@@ -152,56 +172,15 @@ export function Setting() {
 
   return (
     <div className="w-full h-[450px]">
-      <Tabs defaultValue="general" className="w-full flex flex-col">
-        <TabsList className="grid grid-cols-3 mb-4 w-full">
-          <TabsTrigger value="general">일반 설정</TabsTrigger>
+      <Tabs defaultValue="close-rules" className="h-full flex flex-col">
+        <TabsList className="grid grid-cols-2 mb-4 w-full">
           <TabsTrigger value="close-rules">닫기 규칙</TabsTrigger>
           <TabsTrigger value="blocklist">예외 사이트</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="flex-1">
-          <Card className="border-gray-200 dark:border-gray-800">
-            <CardHeader>
-              <CardTitle>일반 설정</CardTitle>
-              <CardDescription>기본 설정을 관리합니다.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <div className="flex gap-4 items-center">
-                  <Slider
-                    id="refreshInterval"
-                    min={1}
-                    max={12 * 60}
-                    value={[settings.refreshInterval]}
-                    onValueChange={(value) => handleGeneralSettingChange("refreshInterval", value[0])}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    min={1}
-                    max={12 * 60}
-                    value={settings.refreshInterval}
-                    onChange={(e) =>
-                      handleGeneralSettingChange("refreshInterval", Number.parseInt(e.target.value) || 15)
-                    }
-                    className="w-20"
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground">탭 상태를 확인하는 주기를 설정합니다.</p>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button onClick={saveSettings} className="ml-auto">
-                <Save className="mr-2 h-4 w-4" />
-                설정 저장
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-
         <TabsContent
           value="close-rules"
-          className="h-full"
+          className="h-full pb-2"
         >
           <Card className="overflow-y-auto h-full overflow-x-hidden">
             <CardHeader>
@@ -224,7 +203,7 @@ export function Setting() {
                     <SelectItem value="idle">탭 활동 없을 시</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-muted-foreground">탭이 비활성 상태로 간주되는 조건을 선택합니다.</p>
+                <p className="text-sm text-muted-foreground">{INACTIVE_TYPE_INFO[settings.closeRules.idleCondition].description}</p>
               </div>
 
               <div className="space-y-2">
@@ -297,8 +276,12 @@ export function Setting() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button onClick={saveSettings} className="ml-auto">
-                <Save className="mr-2 h-4 w-4" />
+              <Button
+                onClick={submitSettings}
+                className="ml-auto"
+                disabled={isLoading}
+              >
+                {isLoading ? <Save className="mr-2 size-4" /> : <Loader2Icon className="mr-2 size-4 animate-spin" />}
                 설정 저장
               </Button>
             </CardFooter>
@@ -307,10 +290,10 @@ export function Setting() {
 
         <TabsContent
           value="blocklist"
-          className="h-full"
+          className="h-full pb-2"
         >
           <Card className="overflow-y-auto h-full overflow-x-hidden">
-            <CardHeader>
+            <CardHeader className="">
               <CardTitle>예외 사이트 설정</CardTitle>
               <CardDescription>특정 사이트에 대해 다른 닫기 규칙을 적용합니다.</CardDescription>
             </CardHeader>
@@ -348,6 +331,7 @@ export function Setting() {
                         <SelectItem value="idle">활동 없을 시</SelectItem>
                       </SelectContent>
                     </Select>
+
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="blocklistIdleThreshold" className="text-right">
@@ -405,62 +389,112 @@ export function Setting() {
 
                 <div className="rounded-md border">
                   <ScrollArea className="h-[300px]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs">URL</TableHead>
-                          <TableHead className="text-xs">비활성 조건</TableHead>
-                          <TableHead className="text-xs">비활성 시간</TableHead>
-                          {/* <TableHead className="text-xs">옵션</TableHead> */}
-                          <TableHead className="w-[100px] text-xs">관리</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {settings.blocklist.map((item, index) => (
-                          <TableRow key={index}>
-                            <TableCell className="text-xs font-medium">{item.url}</TableCell>
-                            <TableCell className="text-xs">{getInactiveTypeLabel(item.rule.idleCondition)}</TableCell>
-                            <TableCell className="text-xs">
-                              <div className="flex justify-center items-center gap-2">
-                                <span>{formatTime(item.rule.idleThreshold)}</span>
-                              </div>
-                            </TableCell>
-                            {/* <TableCell>
-                              <div className="flex flex-wrap gap-1">
-                                {item.rule.mutedTabIgnore && (
-                                  <Badge variant="default" className="text-xs">
-                                    음소거 무시
-                                  </Badge>
-                                )}
-                                {item.rule.pinnedTabIgnore && (
-                                  <Badge variant="default" className="text-xs">
-                                    고정 무시
-                                  </Badge>
-                                )}
-                              </div>
-                            </TableCell> */}
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeBlocklistItem(index)}
-                                className="size-6"
-                                style={{ padding: 0}}
-                              >
-                                <Trash2 className="text-red-500" />
-                              </Button>
-                            </TableCell>
+                    <TooltipProvider>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">URL</TableHead>
+                            <TableHead className="text-xs">비활성 조건</TableHead>
+                            <TableHead className="text-xs">비활성 시간</TableHead>
+                            {/* <TableHead className="text-xs">옵션</TableHead> */}
+                            <TableHead className="w-[100px] text-xs">관리</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {settings.blocklist.map((item, index) => {
+                            const Icon = INACTIVE_TYPE_INFO[item.rule.idleCondition].icon;
+                            return (
+                              <TableRow key={index}>
+                                <TableCell className="max-w-sm w-full">
+                                  <Tooltip>
+                                    <TooltipTrigger className="w-full text-xs font-medium text-ellipsis text-start">
+                                      {item.url}
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xl">
+                                      {item.url}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                                <TableCell className="flex gap-1">
+                                  <Tooltip>
+                                    <TooltipTrigger className="">
+                                        <Icon size={20} />
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xl">
+                                      {INACTIVE_TYPE_INFO[item.rule.idleCondition].label}
+                                    </TooltipContent>
+                                  </Tooltip>
+
+                                  {item.rule.mutedTabIgnore && (
+
+                                    <Tooltip>
+                                      <TooltipTrigger className="">
+                                          <VolumeIcon size={20} />
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xl">
+                                        음소거 무시
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  {item.rule.pinnedTabIgnore && (
+                                    <Tooltip>
+                                      <TooltipTrigger className="">
+                                          <PinOffIcon size={20} />
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xl">
+                                        핀 무시
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  <div className="flex justify-center items-center gap-2">
+                                    <span>{item.rule.idleThreshold ?
+                                      formatTime(item.rule.idleThreshold) :
+                                      "잠금"}</span>
+                                  </div>
+                                </TableCell>
+                                {/* <TableCell>
+                                <div className="flex flex-wrap gap-1">
+                                  {item.rule.mutedTabIgnore && (
+                                    <Badge variant="default" className="text-xs">
+                                      음소거 무시
+                                    </Badge>
+                                  )}
+                                  {item.rule.pinnedTabIgnore && (
+                                    <Badge variant="default" className="text-xs">
+                                      고정 무시
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell> */}
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeBlocklistItem(index)}
+                                    className="size-6"
+                                    style={{ padding: 0 }}
+                                  >
+                                    <Trash2 className="text-red-500" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table></TooltipProvider>
                   </ScrollArea>
                 </div>
               </div>
             </CardContent>
             <CardFooter>
-              <Button onClick={saveSettings} className="ml-auto">
-                <Save className="mr-2 h-4 w-4" />
+              <Button
+                onClick={submitSettings}
+                className="ml-auto"
+                disabled={isLoading}
+              >
+                {isLoading ? <Save className="mr-2 size-4" /> : <Loader2Icon className="mr-2 size-4 animate-spin" />}
                 설정 저장
               </Button>
             </CardFooter>

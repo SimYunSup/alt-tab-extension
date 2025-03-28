@@ -43,22 +43,23 @@ class BackgroundCache<T extends keyof ProtocolMap> {
 }
 
 export const useSetting = () => {
-  const [setting, setSetting] = React.useState<Setting | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [settings, setSettings] = React.useState<Setting | null>(null);
   React.useEffect(() => {
     async function getSetting() {
-      const setting = await storage.getItem<Setting>(`local:${SETTING_KEY}`);
-      if (setting) {
-        setSetting(setting);
+      const _settings = await storage.getItem<Setting>(`local:${SETTING_KEY}`);
+      if (_settings) {
+        setSettings(_settings);
       }
     }
     getSetting();
     const unwatch = storage.watch(`local:${SETTING_KEY}`, (setting: Setting | null) => {
       if (setting) {
-        setSetting((_setting) => {
-          if (JSON.stringify(_setting) !== JSON.stringify(setting)) {
+        setSettings((_settings) => {
+          if (JSON.stringify(_settings) !== JSON.stringify(setting)) {
             return setting;
           }
-          return _setting;
+          return _settings;
         });
       }
     });
@@ -66,14 +67,18 @@ export const useSetting = () => {
       unwatch();
     };
   }, []);
-  React.useEffect(() => {
-    async function setSetting() {
-      await storage.setItem<Setting>(`local:${SETTING_KEY}`, setting ?? null);
-    }
-    setSetting();
-  }, [setting]);
 
-  return [setting, setSetting] as const;
+  return {
+    settings,
+    async saveSettings(settingSetter: ((s: Setting | null) => Setting | null) | Setting | null) {
+      const _settings = settingSetter instanceof Function ? settingSetter(settings) : settingSetter;
+      setIsLoading(true);
+      await storage.setItem<Setting>(`local:${SETTING_KEY}`, _settings ?? null);
+      setSettings(_settings);
+      setIsLoading(false);
+    },
+    isLoading,
+  };
 }
 
 
