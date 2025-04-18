@@ -65,7 +65,6 @@ export function RecordTabs() {
 
   const restoreSelectedTabs = () => {
     if (selectedTabs.length === 0) return
-    alert(`${selectedTabs.length}개의 탭을 복원합니다.`)
     selectedTabs.forEach((tabUrl) => {
       const tab = closedTabs.find((t) => t.url === tabUrl)
       if (tab) restoreTab(tab)
@@ -83,12 +82,15 @@ export function RecordTabs() {
         </div>
 
         <div className="h-4 flex items-center justify-end">
-          {selectedTabs.length > 0 && (
-            <Button size="sm" onClick={restoreSelectedTabs} className="w-full">
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-              선택한 탭 복원 ({selectedTabs.length})
-            </Button>
-          )}
+          <Button
+            size="sm"
+            onClick={restoreSelectedTabs}
+            className="w-full"
+            disabled={selectedTabs.length === 0}
+          >
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+            선택한 탭 복원 ({selectedTabs.length})
+          </Button>
         </div>
       </div>
 

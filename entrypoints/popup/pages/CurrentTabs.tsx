@@ -185,18 +185,15 @@ export const CurrentTabs = () => {
       <div className="p-4 border-b flex flex-col gap-2">
         <div className="flex items-center">
           <h2 className="text-lg font-medium mr-auto">현재 기기의 탭</h2>
-          {
-            selectedTabs.size > 0 && (
-              <Button
-                variant="outline"
-                size="icon"
-                className="w-8 h-6 mr-2"
-                onClick={onClickCloseButton}
-              >
-                <ArchiveIcon className="size-4" /><span className="sr-only">닫기</span>
-              </Button>
-            )
-          }
+          <Button
+            variant="outline"
+            size="icon"
+            className="w-8 h-6 mr-2"
+            onClick={onClickCloseButton}
+            disabled={selectedTabs.size === 0 || isLoading}
+          >
+            <ArchiveIcon className="size-4" /><span className="sr-only">닫기</span>
+          </Button>
           {selectedTabs.size > 0 ? (
             <Badge variant="default" className="font-normal h-6">
               {selectedTabs.size} / {Object.keys(tabs).length} 탭
