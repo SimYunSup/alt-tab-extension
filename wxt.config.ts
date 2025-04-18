@@ -1,24 +1,22 @@
 import { defineConfig } from "wxt";
-import { patchCssModules } from "vite-css-modules"
 import tailwindcss from "@tailwindcss/vite";
 import svgr from "vite-plugin-svgr";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  extensionApi: "chrome",
-  modules: [
-    "@wxt-dev/module-react",
-    "@wxt-dev/auto-icons",
-  ],
   vite(env) {
     return {
       plugins: [
-        patchCssModules(),
         tailwindcss(),
         svgr(),
       ],
     };
   },
+  modules: [
+    "@wxt-dev/module-react",
+    "@wxt-dev/auto-icons",
+  ],
+  imports: false,
   manifest({
     browser,
   }) {
@@ -32,6 +30,7 @@ export default defineConfig({
         "activeTab",
         "cookies",
         "nativeMessaging",
+        "identity"
       ],
       host_permissions: [
         "<all_urls>",

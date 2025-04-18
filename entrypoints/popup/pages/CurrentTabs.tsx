@@ -1,19 +1,25 @@
+import type { ClientTabInfo } from "@/utils/Tab";
+import type { Setting } from "@/utils/Setting";
+
+import React from "react";
+import {
+  ArchiveIcon,
+  Clock,
+  Search,
+} from "lucide-react";
 import { Badge } from "@/entrypoints/components/ui/badge";
 import { Input } from "@/entrypoints/components/ui/input";
 import { Button } from "@/entrypoints/components/ui/button";
 import { ScrollArea } from "@/entrypoints/components/ui/scroll-area";
 import { Separator } from "@/entrypoints/components/ui/separator";
-import type { ClientTabInfo } from "@/types/data";
 import { cn } from "@/utils";
-import { Archive, Clock, Search, Settings } from "lucide-react";
-import React from "react"
-import { useSetting, useTabs } from "../hooks/useBackground";
-
+import { isClosableTab, saveTabIndexedDB } from "@/utils/Tab";
+import { useSetting, useTabs } from "../hooks/useStorageValue";
 
 const formatRemainingTime = (milliseconds: number) => {
   const seconds = Math.floor(milliseconds / 1000)
   if (seconds < 60) {
-    return `${seconds}초`
+    return seconds > 0 ? `${seconds}초` : "종료 중"
   } else {
     const minutes = Math.floor(seconds / 60)
     const hours = Math.floor(minutes / 60)
@@ -22,9 +28,10 @@ const formatRemainingTime = (milliseconds: number) => {
   }
 }
 
-const getTimeColor = (minutes: number, limit: number) => {
-  if (minutes / limit < 0.25) return "text-red-500 bg-red-50"
-  if (minutes / limit < 0.5) return "text-amber-500 bg-amber-50"
+const getTimeColor = (seconds: number, limit: number) => {
+  console.log(seconds, limit);
+  if (seconds / limit < 0.25) return "text-red-500 bg-red-50"
+  if (seconds / limit < 0.5) return "text-amber-500 bg-amber-50"
   return "text-emerald-500 bg-emerald-50"
 }
 
@@ -44,13 +51,13 @@ interface TabItemProps {
   tab: ClientTabInfo;
   selected: boolean;
   onClick: () => void;
-  setting: Setting | null;
+  settings: Setting | null;
 }
 function TabItem({
   tab,
   selected,
   onClick,
-  setting,
+  settings,
 }: TabItemProps) {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
@@ -63,66 +70,116 @@ function TabItem({
     }
     setNowInterval();
     return () => clearTimeout(timeout);
-  }, [now]);
-
+  }, []);
+  const closeRule = settings?.blocklist.find((block) => tab.url.startsWith(block.url))?.rule
+    ?? settings?.closeRules ?? null;
+  const isLocked = closeRule?.idleThreshold === 0;
   return (
     <button
-    className={cn(
-      "w-full flex items-center p-2 rounded-md group hover:bg-slate-100 transition-colors cursor-pointer",
-      selected && "bg-slate-100",
-    )}
-    onClick={onClick}
-  >
-    <div className="relative mr-3">
-      <div className="size-8 flex items-center justify-center bg-white rounded-md overflow-hidden shadow-sm">
-        {tab.faviconUrl ? (
-          <img
-            src={tab.faviconUrl}
-            alt=""
-            className="size-5"
-          />
-        ) : (
-          <span className="text-sm font-medium text-slate-700 size-5"></span>
-        )}
+      className={cn(
+        "w-full flex items-center p-2 rounded-md group hover:bg-slate-100 transition-colors cursor-pointer",
+        selected && "bg-slate-100",
+      )}
+      onClick={onClick}
+    >
+      <div className="relative mr-3">
+        <div className="size-8 flex items-center justify-center bg-white rounded-md overflow-hidden shadow-sm">
+          {tab.faviconUrl ? (
+            <img
+              src={tab.faviconUrl}
+              alt=""
+              className="size-5"
+            />
+          ) : (
+            <span className="text-sm font-medium text-slate-700 size-5"></span>
+          )}
+        </div>
       </div>
-    </div>
 
-    <div className="flex-1 min-w-0 mr-2">
-      <div className="text-sm font-medium text-slate-900 truncate text-start">{tab.title}</div>
-      <div className="flex items-center">
-        <span className="text-xs text-slate-500 truncate">{tab.url}</span>
+      <div className="flex-1 min-w-0 mr-2">
+        <div className="text-sm font-medium text-slate-900 truncate text-start">{tab.title}</div>
+        <div className="flex items-center">
+          <span className="text-xs text-slate-500 truncate">{tab.url}</span>
+        </div>
       </div>
-    </div>
 
-    <div className="flex items-center gap-1 flex-shrink-0">
-      <Clock className="size-3 text-slate-400" />
-      {setting ? (
-        <span
-        className={cn(
-          "text-xs px-1.5 py-0.5 rounded-full font-medium",
-          tab.lastActiveAt === -1 ? "text-slate-400 bg-slate-100" : getTimeColor(tab.lastActiveAt, 60),
-        )}
-      >
-        {tab.lastActiveAt === -1 ? "잠금" : formatRemainingTime(tab.lastActiveAt + setting.closeRules.idleThreshold * 60 * 1000 - Date.now())}
-      </span>
-      ) : null}
-    </div>
-  </button>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <Clock className="size-3 text-slate-400" />
+        {closeRule ? (
+          <span
+            className={cn(
+              "text-xs px-1.5 py-0.5 rounded-full font-medium",
+              isLocked ? "text-slate-400 bg-slate-100" : getTimeColor((tab.lastActiveAt + closeRule.idleThreshold * 60 * 1000 - Date.now()) / 1000, 600),
+            )}
+          >
+            {isLocked ? "잠금" : formatRemainingTime(tab.lastActiveAt + closeRule.idleThreshold * 60 * 1000 - Date.now())}
+          </span>
+        ) : null}
+      </div>
+    </button>
   );
 }
 
 export const CurrentTabs = () => {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTabs, setSelectedTabs] = React.useState<Set<string>>(new Set());
-  const tabs = useTabs();
-  const [setting] = useSetting();
-  const filteredTabs = React.useDeferredValue(Object.fromEntries(Object.entries(tabs).filter(([_, tabInfo]) => {
+  const {
+    tabs,
+    closeTab,
+    isLoading,
+  } = useTabs();
+  const {
+    settings,
+  } = useSetting();
+  const filteredTabs = React.useDeferredValue(Object.fromEntries(Object.entries(tabs ?? {}).filter(([_, tabInfo]) => {
     return tabInfo.title?.toLowerCase().includes(searchQuery.toLowerCase()) ?? true;
   })));
-  const tabWindows = normalizeTabs(filteredTabs);
   React.useEffect(() => {
     setSelectedTabs(new Set());
   }, [searchQuery, tabs]);
+  React.useEffect(() => {
+    const intervalId = setInterval(() => {
+      async function run() {
+        if (!tabs || !settings) {
+          return;
+        }
+        for (const [tabId, tabInfo] of Object.entries(tabs)) {
+          const closeRule = settings.blocklist.find((block) => tabInfo.url.startsWith(block.url))?.rule
+            ?? settings.closeRules;
+          const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
+          try {
+            const tab = await chrome.tabs.get(Number(tabId));
+            console.log(tab.url, isOutdatedTab, closeRule);
+            if (isOutdatedTab && await isClosableTab(tab, settings)) {
+              await Promise.all([
+                chrome.tabs.remove(tab.id!),
+                saveTabIndexedDB(tab, tabInfo)
+              ]);
+            }
+          } catch (error) {
+            console.log("tab is closed", error);
+            return;
+          }
+        }
+      }
+      run();
+    }, 1000);
+    return () => {
+      clearInterval(intervalId);
+    }
+  }, [tabs]);
+  const tabWindows = normalizeTabs(filteredTabs);
+  const onClickCloseButton = () => {
+    closeTab(Array.from(selectedTabs));
+    setSelectedTabs(new Set());
+  }
+  if (!tabs) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <span className="text-sm text-slate-500">탭을 불러오는 중...</span>
+      </div>
+    );
+  }
   return (
     <div className="w-full h-full flex flex-col mx-auto bg-white overflow-hidden">
       <div className="p-4 border-b flex flex-col gap-2">
@@ -130,18 +187,23 @@ export const CurrentTabs = () => {
           <h2 className="text-lg font-medium mr-auto">현재 기기의 탭</h2>
           {
             selectedTabs.size > 0 && (
-              <Button variant="outline" size="icon" className="w-8 h-6 mr-2">
-                <Archive className="size-4" />
+              <Button
+                variant="outline"
+                size="icon"
+                className="w-8 h-6 mr-2"
+                onClick={onClickCloseButton}
+              >
+                <ArchiveIcon className="size-4" /><span className="sr-only">닫기</span>
               </Button>
             )
           }
           {selectedTabs.size > 0 ? (
             <Badge variant="default" className="font-normal h-6">
-              {selectedTabs.size} / {Object.keys(tabs).length} tabs
+              {selectedTabs.size} / {Object.keys(tabs).length} 탭
             </Badge>
           ) : (
             <Badge variant="outline" className="font-normal h-6">
-              {Object.keys(tabs).length} tabs
+              {Object.keys(tabs).length} 탭
             </Badge>
           )}
         </div>
@@ -164,7 +226,7 @@ export const CurrentTabs = () => {
                 <TabItem
                   key={tab.id}
                   tab={tab}
-                  setting={setting}
+                  settings={settings}
                   selected={selectedTabs.has(tab.id)}
                   onClick={() => setSelectedTabs((prev) => {
                     if (prev.has(tab.id)) {

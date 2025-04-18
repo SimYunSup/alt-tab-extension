@@ -5,16 +5,12 @@ export default defineContentScript({
   runAt: "document_end",
   registration: "manifest",
   main() {
+    let intervalId: ReturnType<typeof setInterval> | null = null;
     allowWindowMessaging("background");
     onMessage("get-tab-info", async () => {
-      const tab = await chrome.tabs.getCurrent();
-      const cookies = await chrome.cookies.getAll({
-        url: tab?.url ?? "",
-       });
       const tabInfo = {
         storage: {
           session: Object.keys(sessionStorage).map((key) => `${key}=${sessionStorage[key]}`).join("&"),
-          cookies: JSON.stringify(cookies),
           local: Object.keys(localStorage).map((key) => `${key}=${localStorage[key]}`).join("&"),
         },
         scrollPosition: {
@@ -24,34 +20,47 @@ export default defineContentScript({
       }
       return tabInfo;
     });
+    let idleDetector: IdleDetector | null;
+    let controller = new AbortController();
     onMessage("refresh-interval", async (message) => {
-      const { type, interval } = message.data;
-      let hidden = false;
-      if (type === "idle") {
-        function runIdleCallback() {
-          window.requestIdleCallback(async () => {
-            if (hidden) {
-              const tab = await chrome.tabs.getCurrent();
-              sendMessage("refresh-tab", { tabId: tab?.id });
-              runIdleCallback();
-            }
-          }, { timeout: interval });
+      const { type, tabId, interval, enabled } = message.data;
+      if (!enabled) {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+          return;
+        } else if (idleDetector) {
+          controller.abort();
+          idleDetector = null;
+          return;
         }
-        document.addEventListener("visibilitychange", () => {
-          if (document.hidden) {
-            hidden = true;
-            runIdleCallback();
-          } else {
-            hidden = false;
+      }
+      if (type !== "idle") {
+        controller.abort();
+        idleDetector = null;
+      }
+      if (type === "idle") {
+        controller = new AbortController();
+
+        if (await IdleDetector.requestPermission() !== "granted") {
+          return;
+        }
+        idleDetector = new IdleDetector();
+        idleDetector.addEventListener("change", () => {
+          if (idleDetector?.userState === "idle") {
+            sendMessage("refresh-tab", { tabId }, "background");
           }
+        });
+        await idleDetector.start({
+          threshold: interval,
+          signal: controller.signal
         });
       } else if (type === "visiblity") {
-        document.addEventListener("visibilitychange", async () => {
-          if (document.hidden) {
-            const tab = await chrome.tabs.getCurrent();
-            sendMessage("refresh-tab", { tabId: tab?.id });
+        setInterval(() => {
+          if (!document.hidden) {
+            sendMessage("refresh-tab", { tabId }, "background");
           }
-        });
+        }, interval);
       }
     });
   },

@@ -1,13 +1,12 @@
 import type { CloseRules } from "@/types/data";
-
-import { storage } from "wxt/storage";
+import { settingStorage } from "./storage";
 
 export const SETTING_KEY = "setting";
 
 export interface Setting {
   closeRules: CloseRules;
   device?: string;
-  refreshInterval: number;
+  refreshInterval?: number;
   blocklist: {
     url: string;
     rule: Omit<CloseRules, "ignoringGrouptabs" | "ignoreContainerTabs">;
@@ -23,7 +22,6 @@ export const DEFAULT_SETTING: Setting = {
     containerTabIgnore: false,
   },
   device: "",
-  refreshInterval: 10000,
   blocklist: [
     ...import.meta.env.BROWSER === "chrome" ? [
       {
@@ -60,10 +58,10 @@ export const DEFAULT_SETTING: Setting = {
   ],
 };
 
-export async function getSetting() {
-  const _setting = await storage.getItem<Setting>(`local:${SETTING_KEY}`);
+export async function getSetting(): Promise<Setting> {
+  const _setting = await settingStorage.getValue();
   if (!_setting) {
-    await storage.setItem<Setting>(`local:${SETTING_KEY}`, DEFAULT_SETTING);
+    await settingStorage.setValue(DEFAULT_SETTING);
   }
   return _setting ?? DEFAULT_SETTING;
 }

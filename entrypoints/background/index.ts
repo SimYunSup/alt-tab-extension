@@ -1,262 +1,187 @@
+import type { ClientTabInfo } from "@/utils/Tab";
 import type { Setting } from "@/utils/Setting";
-import type { ClientTabInfo, TabInfo } from "@/types/data";
 
-import { storage } from "wxt/storage";
-import { onMessage, sendMessage } from "webext-bridge/background";
-import { Tab } from "@/utils/Tab";
-import { getSetting, getURLSetting } from "@/utils/Setting";
+import { defineBackground } from "#imports";
+import { sendMessage } from "webext-bridge/background";
+import { convertToClientTabInfo, saveTabIndexedDB } from "@/utils/Tab";
+import { isClosableTab } from "@/utils/Tab";
+import { getSetting } from "@/utils/Setting";
+import { currentTabStorage, settingStorage, accessTokenStorage, refreshTokenStorage } from "@/utils/storage";
 
+
+const DEFAULT_INTERVAL = 10_000;
 
 export default defineBackground(() => {
   async function init() {
-    let isMounted = false;
-    const setting = await getSetting();
-    const deactivatedTabs = await resetDeactivatedTabs();
-    let tabs = await resetTabInstance(deactivatedTabs, setting);
-    storage.watch<Setting>(`local:${SETTING_KEY}`, async (setting) => {
+    let listClearInterval: () => void = () => { };
+    await initTab();
+    settingStorage.watch(async (setting) => {
       if (!setting) {
         return;
       }
-      tabs = await resetTabInstance(deactivatedTabs, setting);
+      listClearInterval();
+      await initTab();
     });
+    chrome.runtime.onStartup.addListener(async () => {
+      await initTab();
+    });
+    // Oauth flow
+    function detectOauthFlow(_url: string) {
+      const url = new URL(_url);
+      const hash = url.hash;
+      const accessToken = /access_token=([a-zA-Z0-9\.\-\_]+)/.exec(hash)?.[1];
+      const refreshToken = /refresh_token=([a-zA-Z0-9\.\-\_]+)/.exec(hash)?.[1];
+      if (!accessToken || !refreshToken) {
+        return;
+      }
+      accessTokenStorage.setValue(accessToken);
+      refreshTokenStorage.setValue(refreshToken);
+    }
+    chrome.tabs.onCreated.addListener(async (tab) => {
+      if (!tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL)) {
+        return;
+      }
+      detectOauthFlow(tab.url);
+      await chrome.tabs.remove(tab.id!);
+    });
+    chrome.tabs.onUpdated.addListener(async (_, __, tab) => {
+      if (!tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL) || !tab.active) {
+        return;
+      }
+      detectOauthFlow(tab.url);
+      await chrome.tabs.remove(tab.id!);
+    });
+
+    // Tab event
     chrome.tabs.onCreated.addListener(async (tab) => {
       if (!tab.id) {
         return;
       }
-      const setting = await getSetting();
-      const inactiveType = getURLSetting(setting, tab.url ?? "").idleCondition;
-      const tabInstance = new Tab(tab, inactiveType);
-      tabs.push(tabInstance);
-      if (!isMounted) {
-        return;
-      }
-      sendMessage("tab-update", normalizeTabs(tabs, setting), "popup");
+      let tabs = await currentTabStorage.getValue();
+      tabs = tabs ?? {};
+      const currentTabInfo = convertToClientTabInfo(tab);
+      tabs[currentTabInfo.id] = currentTabInfo;
+      await currentTabStorage.setValue(tabs);
     });
     chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-      if (!tabId) {
-        return;
-      }
-      const setting = await getSetting();
-      const tabInstance = tabs.find((tab) => tab.tabInstance.id === tabId);
-      if (!tabInstance) {
-        if (!tab.id) {
-          return;
-        }
-        const inactiveType = getURLSetting(setting, tab.url ?? "").idleCondition;
-        const tabInstance = new Tab(tab, inactiveType);
-        addRefreshInterval(tabInstance, setting);
-        tabs.push(tabInstance);
-        if (!isMounted) {
-          return;
-        }
-        sendMessage("tab-update", normalizeTabs(tabs, setting), "popup");
-        return;
-      }
-      tabInstance.updateTab(tab);
-      if (!isMounted) {
-        return;
-      }
-      sendMessage("tab-update", normalizeTabs(tabs, setting), "popup");
+      let tabs = await currentTabStorage.getValue();
+      tabs = tabs ?? {};
+      const currentTabInfo = convertToClientTabInfo(tab);
+      tabs[tabId] = currentTabInfo;
+      await currentTabStorage.setValue(tabs);
     });
     chrome.tabs.onReplaced.addListener(async (tabId, removedTabId) => {
-      const removedTab = tabs.find((tab) => tab.tabInstance.id === removedTabId);
-      if (!removedTab) {
+      if (!tabId || !removedTabId) {
         return;
       }
-      const setting = await getSetting();
-      removedTab.replaceTabId(tabId);
-      if (!isMounted) {
-        return;
+      let tabs = await currentTabStorage.getValue();
+      tabs = tabs ?? {};
+      const currentTabInfo = tabs[removedTabId];
+      if (currentTabInfo) {
+        delete tabs[removedTabId];
+        tabs[tabId] = currentTabInfo;
+        await currentTabStorage.setValue(tabs);
       }
-      sendMessage("tab-update", normalizeTabs(tabs, setting), "popup");
     })
     chrome.tabs.onRemoved.addListener(async (tabId) => {
       if (!tabId) {
         return;
       }
-      const index = tabs.findIndex((tab) => tab.tabInstance.id === tabId);
-      if (index !== -1) {
-        tabs.splice(index, 1);
+      let tabs = await currentTabStorage.getValue();
+      tabs = tabs ?? {};
+      const currentTabInfo = tabs[tabId];
+      if (currentTabInfo) {
+        delete tabs[tabId];
+        await currentTabStorage.setValue(tabs);
       }
-      if (!isMounted) {
-        return;
-      }
-      const setting = await getSetting();
-      sendMessage("tab-update", normalizeTabs(tabs, setting), "popup");
     });
-  }
-
-  async function normalizeRecordTab(tab: Tab) {
-    const tabInfo = await sendMessage("get-tab-info", undefined, `content-script${tab.tabInstance.id ?? 0}`);
-    return {
-      id: tab.tabInstance.id!.toString(),
-      title: tab.tabInstance.title ?? tab.tabInstance.url!,
-      windowId: tab.tabInstance.windowId.toString(),
-      tabIndex: tab.tabInstance.index,
-      url: tab.tabInstance.url!,
-      groupId: tab.tabInstance.groupId.toString(),
-      faviconUrl: tab.tabInstance.favIconUrl,
-      lastActiveAt: tab.lastActivityTimeStamp,
-      device: navigator.userAgent,
-      isIncognito: tab.tabInstance.incognito,
-      scrollPosition: tabInfo?.scrollPosition,
-      storge: tabInfo?.storage,
-    } satisfies TabInfo;
-  }
-  async function resetDeactivatedTabs() {
-    const set = new Set<TabInfo | Tab>();
-    return new Proxy(set, {
-      get(target, prop, receiver) {
-        if (prop === "add") {
-          return async (tab: Tab) => {
-            const recordTab = await normalizeRecordTab(tab);
-            target.add(recordTab);
-
-            sendMessage("record-tab-update", Array.from(target as Set<TabInfo>), "popup");
-            setTimeout(() => {
-              chrome.tabs.remove(tab.tabInstance.id!);
-            }, 0);
+    settingStorage.watch(
+      async function (setting) {
+        const tabs = await currentTabStorage.getValue();
+        if (!tabs) {
+          return;
+        }
+        for (const [tabId, tabInfo] of Object.entries(tabs)) {
+          const closeRule = setting.blocklist.find((block) => tabInfo.url.startsWith(block.url))?.rule
+            ?? setting.closeRules;
+          const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
+          try {
+            const tab = await chrome.tabs.get(Number(tabId));
+            console.log(tab.url, isOutdatedTab, closeRule);
+            if (isOutdatedTab && await isClosableTab(tab, setting)) {
+              await Promise.all([
+                chrome.tabs.remove(tab.id!),
+                saveTabIndexedDB(tab, tabInfo)
+              ]);
+            }
+          } catch (error) {
+            console.log("tab is closed", error);
+            return;
           }
         }
-        return Reflect.get(target, prop, receiver);
-      },
-    }) as Set<Tab>;
-  }
-  type DeactivatedTabs = Awaited<ReturnType<typeof resetDeactivatedTabs>>;
-
-  async function resetTabInstance(_deactivatedTabs: DeactivatedTabs, setting: Setting) {
-    const query = await chrome.tabs.query({});
-    const basedTabs = query.map((tab) => {
-      const inactiveType = getURLSetting(setting, tab.url ?? "").idleCondition;
-      const tabInstance = new Tab(tab, inactiveType);
-      return tabInstance;
-    });
-
-    const tabs = createObservableArray(
-      basedTabs,
-      ["lastActivityTimeStamp", "url"],
-      (change) => {
-        const deactivatedTabs = change.filter((tab) => {
-          const blocklist = setting.blocklist.find((block) => tab.url.startsWith(block.url));
-          if (blocklist) {
-            return blocklist.rule.idleThreshold > 0 && tab.lastActivityTimeStamp < Date.now() - 1000 * 60 * blocklist.rule.idleThreshold;
-          }
-          return setting.closeRules.idleThreshold > 0 && tab.lastActivityTimeStamp < Date.now() - 1000 * 60 * setting.closeRules.idleThreshold;
-        });
-        deactivatedTabs.forEach((tab) => {
-          if (tab.isClosable(setting)) {
-            _deactivatedTabs.add(tab);
-          }
-        });
-        const changedTabs = change.filter((tab) => !deactivatedTabs.includes(tab));
-        sendMessage("tab-update", normalizeTabs(changedTabs, setting), "popup");
-      }
-    )
-    tabs.forEach((tab) => addRefreshInterval(tab, setting));
-    onMessage("get-current-tabs", async () => {
+      })
+    async function initTab() {
+      const tabs = await chrome.tabs.query({});
       const setting = await getSetting();
-      return normalizeTabs(tabs, setting);
-    });
+      const clientTabArray = tabs.map((tab) => convertToClientTabInfo(tab));
+      console.log(clientTabArray);
+      await currentTabStorage.setValue(Object.fromEntries(clientTabArray.map((tab) => [tab.id, tab])));
+      const intervalResult = clientTabArray.map((tab) => {
+        const success = addRefreshInterval(tab, setting);
+        return [tab.id, success] as const;
+      });
+      const sharedIntervalId = setInterval(async () => {
+        const activeTabs = await chrome.tabs.query({ active: true });
+        const clientTabs = await currentTabStorage.getValue();
+        for (const activeTab of activeTabs) {
+          const tabInfo = clientTabs?.[String(activeTab.id!)];
+          if (tabInfo) {
+            const currentTabInfo = convertToClientTabInfo(activeTab);
+            clientTabs[activeTab.id!] = currentTabInfo;
+          }
+        }
+        console.log(activeTabs.map((tab) => tab.id));
+        await currentTabStorage.setValue(clientTabs);
+      }, DEFAULT_INTERVAL);
 
-    return tabs;
+      listClearInterval = () => {
+        Promise.all(intervalResult.map(([tabId, isContentScript]) => {
+          if (isContentScript) {
+            sendMessage("refresh-interval", {
+              type: "idle", // whatever
+              tabId: Number(tabId),
+              interval: DEFAULT_INTERVAL,
+              enabled: false,
+            });
+          }
+        }));
+        clearInterval(sharedIntervalId);
+      };
+    }
   }
-  function addRefreshInterval(tab: Tab, setting: Setting) {
-    if (setting.closeRules.idleCondition === "idle") {
+
+  function addRefreshInterval(tab: ClientTabInfo, setting: Setting) {
+    if (setting.closeRules.idleCondition === "idle" && (
+      import.meta.env.CHROME ||
+      import.meta.env.EDGE
+    )) {
       sendMessage("refresh-interval", {
         type: "idle",
-        tabId: tab.tabInstance.id ?? 0,
-        interval: setting.refreshInterval,
-      }, `content-script${tab.tabInstance.id ?? 0}`);
-    } else if (setting.closeRules.idleCondition === "window") {
-      if (!tab.lastActivityTimeStamp) {
-        return;
-      }
-      const intervalId = setInterval(() => {
-        async function checkActive() {
-          const activeInfo = await chrome.tabs.get(Number(tab.tabInstance.id));
-          if (activeInfo.active) {
-            tab.lastActivityTimeStamp = Date.now();
-          } else {
-            clearInterval(intervalId);
-          }
-        }
-        checkActive();
-      }, setting.refreshInterval);
-      return () => clearInterval(intervalId);
+        tabId: Number(tab.id),
+        interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
+        enabled: setting.closeRules.idleThreshold > 0,
+      }, `content-script${tab.id ?? 0}`);
+      return true;
     } else if (setting.closeRules.idleCondition === "visiblity") {
       sendMessage("refresh-interval", {
         type: "visiblity",
-        tabId: tab.tabInstance.id ?? 0,
-        interval: setting.refreshInterval,
-      }, `content-script${tab.tabInstance.id ?? 0}`);
+        tabId: Number(tab.id),
+        interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
+        enabled: setting.closeRules.idleThreshold > 0,
+      }, `content-script${tab.id ?? 0}`);
+      return true;
     }
+    return false;
   }
   init();
 });
-
-function normalizeTabs(tabs: Tab[], setting: Setting): Record<string, ClientTabInfo> {
-  return Object.fromEntries(tabs.map(((tab) => {
-    const currentRules = setting.blocklist.find((block) => tab.url.startsWith(block.url))?.rule ?? setting.closeRules;
-    const isLocked = currentRules.idleThreshold === 0
-      || (tab.tabInstance.pinned && currentRules.pinnedTabIgnore)
-      || (tab.tabInstance.mutedInfo?.muted && currentRules.mutedTabIgnore);
-    return [
-      tab.tabInstance.id,
-      {
-        id: tab.tabInstance.id,
-        title: tab.tabInstance.title,
-        windowId: tab.tabInstance.windowId.toString(),
-        tabIndex: tab.tabInstance.index,
-        url: tab.tabInstance.url,
-        faviconUrl: tab.tabInstance.favIconUrl,
-        lastActiveAt: isLocked ? -1 : tab.lastActivityTimeStamp,
-      }
-    ]
-  })));
-}
-
-function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
-  let timer: ReturnType<typeof setTimeout>;
-  return function (...args: Parameters<T>) {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  } as T;
-}
-
-function createObservableArray<T extends object>(
-  initialArray: T[],
-  property: (keyof T)[],
-  callback: (change: T[]) => void,
-  debounceDelay = 300
-): T[] {
-  const array = [...initialArray];
-  const debouncedCallback = debounce(() => callback(array), debounceDelay);
-  return array.map((item, index) => wrapInstance(item, property, debouncedCallback));
-}
-
-function wrapInstance<T extends object>(
-  instance: T,
-  property: (keyof T)[],
-  callback: () => void
-): T {
-  return new Proxy(instance, {
-    get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
-      if (typeof value === 'function') {
-        return value.bind(target);
-      }
-      return value;
-    },
-    set(target, prop, value, receiver) {
-      if (property.includes(prop as keyof T)) {
-        const oldValue = target[prop as keyof T];
-        const result = Reflect.set(target, prop, value, receiver);
-        if (oldValue !== value) {
-          callback();
-        }
-        return result;
-      }
-      return Reflect.set(target, prop, value, receiver);
-    }
-  });
-}

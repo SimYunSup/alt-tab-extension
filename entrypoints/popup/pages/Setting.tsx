@@ -1,7 +1,15 @@
 import type { InactiveType, CloseRules } from "@/types/data"
 
+import React from "react"
 import { Button } from "@/entrypoints/components/ui/button"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/entrypoints/components/ui/card"
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter
+} from "@/entrypoints/components/ui/card"
 import { Input } from "@/entrypoints/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/entrypoints/components/ui/tabs"
 import {
@@ -28,14 +36,26 @@ import {
   TableRow
 } from "@/entrypoints/components/ui/table"
 import { Switch } from "@/entrypoints/components/ui/switch"
-import { useSetting } from "../hooks/useBackground"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/entrypoints/components/ui/tooltip"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/entrypoints/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/entrypoints/components/ui/select"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "@/entrypoints/components/ui/tooltip"
+import { useSetting } from "../hooks/useStorageValue"
+import { DEFAULT_SETTING } from "@/utils/Setting"
 
 const INACTIVE_TYPE_INFO = {
   window: {
     label: "윈도우 변경 시",
-    description: "Chrome에서는 탭 변경 시, Firefox에서는 윈도우 변경 시 탭이 inactive 상태로 간주됩니다.",
+    description: "Chrome/Edge에서는 탭 변경 시, Firefox에서는 윈도우 변경 시 탭이 inactive 상태로 간주됩니다.",
     icon: AppWindowMacIcon
   },
   visiblity: {
@@ -45,7 +65,7 @@ const INACTIVE_TYPE_INFO = {
   },
   idle: {
     label: "활동 없을 시",
-    description: "탭이 활동 없을 시 inactive 상태로 간주됩니다.",
+    description: "탭이 활동 없을 시 inactive 상태로 간주됩니다(Chrome/Edge에서만 가능).",
     icon: Clock2Icon
   },
 } as const;
@@ -56,11 +76,11 @@ export function Setting() {
     settings,
     saveSettings,
   } = useSetting();
-  const [_settings, setSettings] = useState(() => settings ?? DEFAULT_SETTING);
-  useEffect(() => {
+  const [_settings, setSettings] = React.useState(() => settings ?? DEFAULT_SETTING);
+  React.useEffect(() => {
     setSettings(settings ?? DEFAULT_SETTING)
   }, [settings]);
-  const [newBlocklistItem, setNewBlocklistItem] = useState({
+  const [newBlocklistItem, setNewBlocklistItem] = React.useState({
     url: "",
     rule: {
       idleCondition: "window" as InactiveType,
@@ -265,7 +285,7 @@ export function Setting() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="containerTabIgnore">컨테이너 탭 무시</Label>
-                    <p className="text-sm text-muted-foreground">컨테이너 탭은 자동으로 닫지 않습니다.</p>
+                    <p className="text-sm text-muted-foreground">Chrome에서는 탭 그룹, Firefox에서는 컨테이너 탭은 자동으로 닫지 않습니다.</p>
                   </div>
                   <Switch
                     id="containerTabIgnore"
