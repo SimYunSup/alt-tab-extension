@@ -11,7 +11,7 @@ import {
 } from "@/utils/storage";
 
 export const useTabs = () => {
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoading, setIsLoading] = React.useState(false);
   const [tabs, setTabs] = React.useState<Record<string, ClientTabInfo> | null>(null);
   React.useEffect(() => {
     async function getTabs() {
