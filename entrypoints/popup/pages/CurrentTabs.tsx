@@ -29,7 +29,6 @@ const formatRemainingTime = (milliseconds: number) => {
 }
 
 const getTimeColor = (seconds: number, limit: number) => {
-  console.log(seconds, limit);
   if (seconds / limit < 0.25) return "text-red-500 bg-red-50"
   if (seconds / limit < 0.5) return "text-amber-500 bg-amber-50"
   return "text-emerald-500 bg-emerald-50"
@@ -149,7 +148,6 @@ export const CurrentTabs = () => {
           const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
           try {
             const tab = await chrome.tabs.get(Number(tabId));
-            console.log(tab.url, isOutdatedTab, closeRule);
             if (isOutdatedTab && await isClosableTab(tab, settings)) {
               await Promise.all([
                 chrome.tabs.remove(tab.id!),

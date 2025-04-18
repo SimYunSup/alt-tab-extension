@@ -107,7 +107,6 @@ export default defineBackground(() => {
           const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
           try {
             const tab = await chrome.tabs.get(Number(tabId));
-            console.log(tab.url, isOutdatedTab, closeRule);
             if (isOutdatedTab && await isClosableTab(tab, setting)) {
               await Promise.all([
                 chrome.tabs.remove(tab.id!),
@@ -124,7 +123,6 @@ export default defineBackground(() => {
       const tabs = await chrome.tabs.query({});
       const setting = await getSetting();
       const clientTabArray = tabs.map((tab) => convertToClientTabInfo(tab));
-      console.log(clientTabArray);
       await currentTabStorage.setValue(Object.fromEntries(clientTabArray.map((tab) => [tab.id, tab])));
       const intervalResult = clientTabArray.map((tab) => {
         const success = addRefreshInterval(tab, setting);
@@ -140,7 +138,6 @@ export default defineBackground(() => {
             clientTabs[activeTab.id!] = currentTabInfo;
           }
         }
-        console.log(activeTabs.map((tab) => tab.id));
         await currentTabStorage.setValue(clientTabs);
       }, DEFAULT_INTERVAL);
 
