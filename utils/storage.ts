@@ -19,7 +19,7 @@ export const settingStorage = storage.defineItem<Setting>(
         idleCondition: "window",
         idleThreshold: 1,
         pinnedTabIgnore: false,
-        mutedTabIgnore: false,
+        playingTabIgnore: false,
         containerTabIgnore: false,
       },
       device: "",

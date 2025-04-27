@@ -1,8 +1,9 @@
 import type { ClientTabInfo } from "@/utils/Tab";
 import type { Setting } from "@/utils/Setting";
 
+import { browser } from 'wxt/browser';
 import { defineBackground } from "#imports";
-import { sendMessage } from "webext-bridge/background";
+import { onMessage, sendMessage } from "webext-bridge/background";
 import { convertToClientTabInfo, saveTabIndexedDB } from "@/utils/Tab";
 import { isClosableTab } from "@/utils/Tab";
 import { getSetting } from "@/utils/Setting";
@@ -22,7 +23,7 @@ export default defineBackground(() => {
       listClearInterval();
       await initTab();
     });
-    chrome.runtime.onStartup.addListener(async () => {
+    browser.runtime.onStartup.addListener(async () => {
       await initTab();
     });
     // Oauth flow
@@ -37,23 +38,23 @@ export default defineBackground(() => {
       accessTokenStorage.setValue(accessToken);
       refreshTokenStorage.setValue(refreshToken);
     }
-    chrome.tabs.onCreated.addListener(async (tab) => {
+    browser.tabs.onCreated.addListener(async (tab) => {
       if (!tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL)) {
         return;
       }
       detectOauthFlow(tab.url);
-      await chrome.tabs.remove(tab.id!);
+      await browser.tabs.remove(tab.id!);
     });
-    chrome.tabs.onUpdated.addListener(async (_, __, tab) => {
+    browser.tabs.onUpdated.addListener(async (_, __, tab) => {
       if (!tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL) || !tab.active) {
         return;
       }
       detectOauthFlow(tab.url);
-      await chrome.tabs.remove(tab.id!);
+      await browser.tabs.remove(tab.id!);
     });
 
     // Tab event
-    chrome.tabs.onCreated.addListener(async (tab) => {
+    browser.tabs.onCreated.addListener(async (tab) => {
       if (!tab.id) {
         return;
       }
@@ -63,14 +64,14 @@ export default defineBackground(() => {
       tabs[currentTabInfo.id] = currentTabInfo;
       await currentTabStorage.setValue(tabs);
     });
-    chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       let tabs = await currentTabStorage.getValue();
       tabs = tabs ?? {};
       const currentTabInfo = convertToClientTabInfo(tab);
       tabs[tabId] = currentTabInfo;
       await currentTabStorage.setValue(tabs);
     });
-    chrome.tabs.onReplaced.addListener(async (tabId, removedTabId) => {
+    browser.tabs.onReplaced.addListener(async (tabId, removedTabId) => {
       if (!tabId || !removedTabId) {
         return;
       }
@@ -83,7 +84,7 @@ export default defineBackground(() => {
         await currentTabStorage.setValue(tabs);
       }
     })
-    chrome.tabs.onRemoved.addListener(async (tabId) => {
+    browser.tabs.onRemoved.addListener(async (tabId) => {
       if (!tabId) {
         return;
       }
@@ -106,10 +107,10 @@ export default defineBackground(() => {
             ?? setting.closeRules;
           const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
           try {
-            const tab = await chrome.tabs.get(Number(tabId));
+            const tab = await browser.tabs.get(Number(tabId));
             if (isOutdatedTab && await isClosableTab(tab, setting)) {
               await Promise.all([
-                chrome.tabs.remove(tab.id!),
+                browser.tabs.remove(tab.id!),
                 saveTabIndexedDB(tab, tabInfo)
               ]);
             }
@@ -120,16 +121,25 @@ export default defineBackground(() => {
         }
       })
     async function initTab() {
-      const tabs = await chrome.tabs.query({});
+      const tabs = await browser.tabs.query({});
       const setting = await getSetting();
       const clientTabArray = tabs.map((tab) => convertToClientTabInfo(tab));
       await currentTabStorage.setValue(Object.fromEntries(clientTabArray.map((tab) => [tab.id, tab])));
+      if (setting.closeRules.idleCondition === "window") {
+        browser.tabs.onActivated.addListener(onActivated);
+      } else {
+        browser.tabs.onActivated.removeListener(onActivated);
+      }
       const intervalResult = clientTabArray.map((tab) => {
         const success = addRefreshInterval(tab, setting);
         return [tab.id, success] as const;
       });
       const sharedIntervalId = setInterval(async () => {
-        const activeTabs = await chrome.tabs.query({ active: true });
+        const setting = await getSetting();
+        if (setting.closeRules.idleCondition !== "window") {
+          return;
+        }
+        const activeTabs = await browser.tabs.query({ active: true });
         const clientTabs = await currentTabStorage.getValue();
         for (const activeTab of activeTabs) {
           const tabInfo = clientTabs?.[String(activeTab.id!)];
@@ -167,7 +177,7 @@ export default defineBackground(() => {
         tabId: Number(tab.id),
         interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
         enabled: setting.closeRules.idleThreshold > 0,
-      }, `content-script${tab.id ?? 0}`);
+      }, `content-script@${tab.id ?? 0}`);
       return true;
     } else if (setting.closeRules.idleCondition === "visiblity") {
       sendMessage("refresh-interval", {
@@ -175,10 +185,36 @@ export default defineBackground(() => {
         tabId: Number(tab.id),
         interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
         enabled: setting.closeRules.idleThreshold > 0,
-      }, `content-script${tab.id ?? 0}`);
+      }, `content-script@${tab.id ?? 0}`);
       return true;
     }
     return false;
   }
+  onMessage("refresh-tab", async (message) => {
+    const { tabId } = message.data;
+    const tab = await browser.tabs.get(tabId);
+    const clientTabs = await currentTabStorage.getValue();
+    const tabInfo = clientTabs?.[String(tabId)];
+    if (tabInfo) {
+      const currentTabInfo = convertToClientTabInfo(tab);
+      clientTabs[tabId] = currentTabInfo;
+    }
+    await currentTabStorage.setValue(clientTabs);
+  });
   init();
 });
+
+async function onActivated(info: chrome.tabs.TabActiveInfo) {
+  const tab = await browser.tabs.get(info.tabId);
+  const settings = await getSetting();
+  const closeRule = settings?.blocklist.find((block) => tab.url?.startsWith(block.url))?.rule
+    ?? settings.closeRules;
+  if (closeRule.idleThreshold === 0 ||
+    closeRule.idleCondition !== "window") {
+    return;
+  }
+  const clientTab = convertToClientTabInfo(tab);
+  const clientTabs = await currentTabStorage.getValue();
+  clientTabs[String(info.tabId)] = clientTab;
+  await currentTabStorage.setValue(clientTabs);
+}
