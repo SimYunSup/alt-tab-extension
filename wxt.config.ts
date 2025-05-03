@@ -21,7 +21,7 @@ export default defineConfig({
     browser,
   }) {
     const manifest = {
-      name: "Alt Tab autoclose",
+      name: "Alt Tab",
       description: "Alt Tab - easy to autoclose tabs",
       permissions: [
         "tabs",

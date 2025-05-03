@@ -13,7 +13,7 @@ function App() {
   return (
     <div className="app-container">
       <Tabs defaultValue="tab-current" className="flex flex-col w-full h-full mx-auto bg-background">
-        <TabsList className="w-full flex gap-2">
+        <TabsList className="flex-initial w-full flex gap-2">
           <TabsTrigger value="tab-current">
             현재 탭
           </TabsTrigger>
@@ -24,13 +24,13 @@ function App() {
             탭 설정
           </TabsTrigger>
         </TabsList>
-        <TabsContent className="flex-1" value="tab-current">
+        <TabsContent className="h-full flex-1" value="tab-current">
           <CurrentTabs />
         </TabsContent>
-        <TabsContent className="flex-1" value="tab-store">
+        <TabsContent className="h-full flex-1" value="tab-store">
           <RecordTabs />
         </TabsContent>
-        <TabsContent className="flex-1" value="tab-settings">
+        <TabsContent className="h-full flex-1" value="tab-settings">
           <Setting />
         </TabsContent>
       </Tabs>

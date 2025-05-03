@@ -2,6 +2,7 @@ import type { ClientTabInfo } from "@/utils/Tab";
 import type { Setting } from "@/utils/Setting";
 
 import React from "react";
+import { browser } from 'wxt/browser';
 import {
   ArchiveIcon,
   Clock,
@@ -40,6 +41,7 @@ function normalizeTabs(tabs: Record<string, ClientTabInfo>) {
     if (!acc[windowId]) {
       acc[windowId] = [];
     }
+    console.log(tab.tabIndex, tab.url);
     acc[windowId][tab.tabIndex] = tab;
     return acc;
   }, {} as Record<string, ClientTabInfo[]>);
@@ -70,9 +72,17 @@ function TabItem({
     setNowInterval();
     return () => clearTimeout(timeout);
   }, []);
+  if (!settings) {
+    return null;
+  }
   const closeRule = settings?.blocklist.find((block) => tab.url.startsWith(block.url))?.rule
-    ?? settings?.closeRules ?? null;
-  const isLocked = closeRule?.idleThreshold === 0;
+    ?? settings.closeRules;
+  const isLocked = closeRule.idleThreshold === 0 ||
+     !closeRule.pinnedTabIgnore && tab.isPinned ||
+      closeRule.unloadTabIgnore && tab.isUnloaded ||
+      !closeRule.playingTabIgnore && tab.isAudible ||
+      closeRule.containerTabIgnore && tab.groupId
+    ;
   return (
     <button
       className={cn(
@@ -147,10 +157,10 @@ export const CurrentTabs = () => {
             ?? settings.closeRules;
           const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
           try {
-            const tab = await chrome.tabs.get(Number(tabId));
+            const tab = await browser.tabs.get(Number(tabId));
             if (isOutdatedTab && await isClosableTab(tab, settings)) {
               await Promise.all([
-                chrome.tabs.remove(tab.id!),
+                browser.tabs.remove(tab.id!),
                 saveTabIndexedDB(tab, tabInfo)
               ]);
             }

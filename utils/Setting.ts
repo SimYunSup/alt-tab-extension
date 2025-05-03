@@ -17,8 +17,9 @@ export const DEFAULT_SETTING: Setting = {
   closeRules: {
     idleCondition: "window",
     idleThreshold: 1,
+    unloadTabIgnore: false,
     pinnedTabIgnore: false,
-    mutedTabIgnore: false,
+    playingTabIgnore: false,
     containerTabIgnore: false,
   },
   device: "",

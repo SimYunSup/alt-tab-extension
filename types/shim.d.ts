@@ -9,18 +9,14 @@ import type {
   ScrollPosition,
   StorageInfo,
 } from "@/utils/Tab";
-import { ContextualIdentities } from "wxt/browser";
 import type * as argon2 from "@node-rs/argon2";
 
 
 declare module "webext-bridge" {
   export interface ProtocolMap {
-    "refresh-tab": ProtocolWithReturn<{ tabId?: number }, void>;
+    "refresh-tab": ProtocolWithReturn<{ tabId: number }, void>;
     "refresh-interval": ProtocolWithReturn<{ tabId: number; type: InactiveType; interval: number; enabled?: boolean }, void>;
-    "get-current-tabs": ProtocolWithReturn<void, Record<string, ClientTabInfo>>;
-    "tab-update": ProtocolWithReturn<Record<string, ClientTabInfo>, void>;
     "get-tab-info": ProtocolWithReturn<void, { storage: StorageInfo, scrollPosition: ScrollPosition } | null>;
-    "unmount": ProtocolWithReturn<void, void>;
   }
 }
 declare global {
@@ -31,11 +27,6 @@ declare global {
     userState: "active" | "idle";
     static requestPermission(): Promise<"granted" | "denied">;
   }
-
-  interface WxtBrowser extends WxtBrowser {
-    contextualIdentities: ContextualIdentities;
-  }
-  const browser: WxtBrowser;
 };
 
 declare module "@node-rs/argon2/browser" {

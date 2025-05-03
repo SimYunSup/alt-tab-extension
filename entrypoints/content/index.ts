@@ -1,3 +1,4 @@
+import { defineContentScript } from "#imports";
 import { allowWindowMessaging, onMessage, sendMessage } from "webext-bridge/content-script";
 
 export default defineContentScript({
@@ -61,6 +62,12 @@ export default defineContentScript({
             sendMessage("refresh-tab", { tabId }, "background");
           }
         }, interval);
+        function onVisibilityChange() {
+          if (document.hidden) {
+            sendMessage("refresh-tab", { tabId }, "background");
+          }
+        }
+        document.addEventListener("visibilitychange", onVisibilityChange, { signal: controller.signal });
       }
     });
   },

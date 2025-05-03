@@ -1,16 +1,18 @@
+import type { Browser } from "wxt/browser";
 import type { Setting } from "./Setting";
+
+import { browser } from "wxt/browser";
 import { sendMessage } from "webext-bridge/background";
 import { db } from "./db";
 
-type TabStatus = "loaded" | "unloaded";
 export const TAB_KEY = "tab";
 export const RECORD_TAB_KEY = "tab-record";
 
 function getDefaultNewTabUrl() {
-  return import.meta.env.BROWSER === "chrome" ? "chrome://newtab" : "about:newtab";
+  return import.meta.env.BROWSER === "browser" ? "browser://newtab" : "about:newtab";
 }
 
-export async function isClosableTab(tab: chrome.tabs.Tab, setting: Setting) {
+export async function isClosableTab(tab: Browser.tabs.Tab, setting: Setting) {
   let closeRules = setting.closeRules;
   const blockRule = setting.blocklist.find((block) => block.url === tab.url);
   if (blockRule) {
@@ -19,10 +21,13 @@ export async function isClosableTab(tab: chrome.tabs.Tab, setting: Setting) {
       ...blockRule.rule,
     };
   }
+  if (closeRules.unloadTabIgnore && tab.status === "unloaded") {
+    return false;
+  }
   if (closeRules.pinnedTabIgnore && tab.pinned) {
     return false;
   }
-  if (closeRules.mutedTabIgnore && tab.mutedInfo?.muted) {
+  if (!closeRules.playingTabIgnore && tab.audible) {
     return false;
   }
   if (closeRules.containerTabIgnore) {
@@ -31,7 +36,7 @@ export async function isClosableTab(tab: chrome.tabs.Tab, setting: Setting) {
     }
     if (import.meta.env.FIREFOX) {
       try {
-        const contextualId = await browser.contextualIdentities.get(
+        const contextualId = await (browser as any).contextualIdentities.get(
           (tab as any).cookieStoreId
         );
         return false;
@@ -44,11 +49,11 @@ export async function isClosableTab(tab: chrome.tabs.Tab, setting: Setting) {
 }
 
 // use this function only in background
-export async function convertTabInfoServer(tab: chrome.tabs.Tab, clientInfo: ClientTabInfo): Promise<TabInfo> {
+export async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTabInfo): Promise<TabInfo> {
   const tabInfo = await sendMessage("get-tab-info", undefined, `content-script@${tab.id ?? 0}`);
   const url = tab.url ?? getDefaultNewTabUrl();
   const urlInstance = new URL(url);
-  const cookies = await chrome.cookies.getAll({
+  const cookies = await browser.cookies.getAll({
     url: url,
   });
   return {
@@ -69,12 +74,14 @@ export async function convertTabInfoServer(tab: chrome.tabs.Tab, clientInfo: Cli
     },
   } satisfies TabInfo;
 }
-export function convertToClientTabInfo(tab: chrome.tabs.Tab): ClientTabInfo {
+export function convertToClientTabInfo(tab: Browser.tabs.Tab): ClientTabInfo {
   return {
     id: tab.id?.toString() ?? '',
     title: tab.title ?? new URL(tab.url ?? getDefaultNewTabUrl()).hostname,
     url: tab.url ?? getDefaultNewTabUrl(),
     tabIndex: tab.index,
+    isPinned: tab.pinned,
+    isAudible: tab.audible,
     groupId: tab.groupId?.toString(),
     windowId: tab.windowId.toString(),
     faviconUrl: tab.favIconUrl,
@@ -82,7 +89,7 @@ export function convertToClientTabInfo(tab: chrome.tabs.Tab): ClientTabInfo {
   };
 }
 
-export async function saveTabIndexedDB(tab: chrome.tabs.Tab, clientTabInfo: ClientTabInfo) {
+export async function saveTabIndexedDB(tab: Browser.tabs.Tab, clientTabInfo: ClientTabInfo) {
   const url = tab.url ?? getDefaultNewTabUrl();
   const urlInstance = new URL(url);
   const tabInfo = {
@@ -103,7 +110,10 @@ export interface ClientTabInfo {
   title: string;
   url: string;
   tabIndex: number; // 탭 순서
-  groupId?: string; // 탭 그룹 id(chrome) or 컨테이너 id(firefox)
+  isPinned?: boolean; // 고정 탭 여부
+  isAudible?: boolean; // 소리 재생 여부
+  isUnloaded?: boolean; // 언로드 탭 여부
+  groupId?: string; // 탭 그룹 id(browser) or 컨테이너 id(firefox)
   windowId: string; // 윈도 id
   faviconUrl?: string; // 저장된 favicon url
   lastActiveAt: number;

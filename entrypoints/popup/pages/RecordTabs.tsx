@@ -1,6 +1,7 @@
 import type { RecordTabInfo, TabInfo } from "@/utils/Tab";
 
 import React from "react";
+import { browser } from 'wxt/browser';
 import { Clock, ExternalLink, RotateCcw } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Badge } from "@/entrypoints/components/ui/badge";
@@ -55,8 +56,8 @@ export function RecordTabs() {
   }
 
   const restoreTab = async (tab: RecordTabInfo) => {
-    const currentWindow = await chrome.windows.getCurrent();
-    chrome.tabs.create({
+    const currentWindow = await browser.windows.getCurrent();
+    browser.tabs.create({
       url: tab.url,
       index: currentWindow.id === Number(tab.windowId) ? tab.tabIndex : undefined,
       windowId: currentWindow.id,

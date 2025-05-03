@@ -2,6 +2,7 @@ import type { ClientTabInfo } from "@/utils/Tab";
 import type { Setting } from "@/utils/Setting";
 
 import React from "react";
+import { browser } from 'wxt/browser';
 import { saveTabIndexedDB } from "@/utils/Tab";
 import { DEFAULT_SETTING } from "@/utils/Setting";
 import {
@@ -41,9 +42,9 @@ export const useTabs = () => {
         await Promise.all(Object.entries(_tabs).map(async ([id, info]) => {
           if (tabId.includes(id)) {
             delete _tabs[id];
-            const tab = await chrome.tabs.get(Number(id));
+            const tab = await browser.tabs.get(Number(id));
             await Promise.all([
-              chrome.tabs.remove(tab.id!),
+              browser.tabs.remove(tab.id!),
               saveTabIndexedDB(tab, info),
             ]);
           }

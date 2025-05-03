@@ -1,3 +1,4 @@
+import { browser } from "wxt/browser";
 import { Button } from "@/entrypoints/components/ui/button";
 import { useToken } from "../../popup/hooks/useStorageValue";
 import GoogleLogoIcon from "../../../assets/google.svg?react";
@@ -10,8 +11,8 @@ export const ArchiveTabs = () => {
       null
     );
   }
-  const onClickLoginButton = async () => {
-    const result = await chrome.identity.launchWebAuthFlow({
+  const onClickLoginButton = () => {
+    browser.identity.launchWebAuthFlow({
       url: `${import.meta.env.VITE_OAUTH_BASE_URL}/oauth/google`,
       interactive: true,
     }, response => console.log(response));
