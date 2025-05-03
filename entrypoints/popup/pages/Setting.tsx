@@ -21,7 +21,9 @@ import {
   Clock2Icon,
   VolumeIcon,
   PinOffIcon,
-  Loader2Icon
+  Loader2Icon,
+  LoaderCircleIcon,
+  ContainerIcon
 } from "lucide-react"
 import { Label } from "@/entrypoints/components/ui/label"
 import { Slider } from "@/entrypoints/components/ui/slider"
@@ -285,8 +287,8 @@ export function Setting() {
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label htmlFor="container-tab-ignore">컨테이너 탭 무시</Label>
-                    <p className="text-sm text-muted-foreground">탭 그룹, Firefox에서는 추가로 컨테이너 탭은 자동으로 닫지 않습니다.</p>
+                    <Label htmlFor="container-tab-ignore">컨테이너 탭 종료</Label>
+                    <p className="text-sm text-muted-foreground">탭 그룹, Firefox에서는 추가로 컨테이너 탭은 자동으로 닫습니다.</p>
                   </div>
                   <Switch
                     id="container-tab-ignore"
@@ -387,7 +389,7 @@ export function Setting() {
                           checked={newBlocklistItem.rule.unloadTabIgnore}
                           onCheckedChange={(checked) => handleNewBlocklistItemChange("rule.unloadTabIgnore", checked)}
                         />
-                        <Label htmlFor="blocklist-unload-tab-ignore">로딩되지 않은 탭 무시</Label>
+                        <Label htmlFor="blocklist-unload-tab-ignore">로드되지 않은 탭 무시</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Switch
@@ -404,6 +406,14 @@ export function Setting() {
                           onCheckedChange={(checked) => handleNewBlocklistItemChange("rule.pinnedTabIgnore", checked)}
                         />
                         <Label htmlFor="blocklist-pinned-tab-ignore">고정된 탭 무시</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="blocklist-pinned-tab-ignore"
+                          checked={newBlocklistItem.rule.pinnedTabIgnore}
+                          onCheckedChange={(checked) => handleNewBlocklistItemChange("rule.containerTabIgnore", checked)}
+                        />
+                        <Label htmlFor="blocklist-pinned-tab-ignore">컨테이너 탭 무시</Label>
                       </div>
                     </div>
                   </div>
@@ -422,8 +432,8 @@ export function Setting() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="text-xs w-[150px]">URL</TableHead>
-                            <TableHead className="text-xs w-[80px]">비활성 조건</TableHead>
+                            <TableHead className="text-xs w-[100px]">URL</TableHead>
+                            <TableHead className="text-xs w-[150px]">비활성 조건</TableHead>
                             <TableHead className="text-xs">비활성 시간</TableHead>
                             {/* <TableHead className="text-xs">옵션</TableHead> */}
                             <TableHead className="w-[100px] text-xs">관리</TableHead>
@@ -434,7 +444,7 @@ export function Setting() {
                             const Icon = INACTIVE_TYPE_INFO[item.rule.idleCondition].icon;
                             return (
                               <TableRow key={index}>
-                                <TableCell className="max-w-[150px] w-full">
+                                <TableCell className="max-w-[100px] w-full">
                                   <Tooltip>
                                     <TooltipTrigger className="w-full text-xs font-medium text-ellipsis text-start">
                                       {item.url}
@@ -444,7 +454,7 @@ export function Setting() {
                                     </TooltipContent>
                                   </Tooltip>
                                 </TableCell>
-                                <TableCell className="flex gap-1 w-[80px]">
+                                <TableCell className="flex gap-1 w-[150px]">
                                   <Tooltip>
                                     <TooltipTrigger className="">
                                       <Icon size={20} />
@@ -452,8 +462,18 @@ export function Setting() {
                                     <TooltipContent className="max-w-xl">
                                       {INACTIVE_TYPE_INFO[item.rule.idleCondition].label}
                                     </TooltipContent>
-                                  </Tooltip>
+                                  </Tooltip>ㄴ
 
+                                  {item.rule.unloadTabIgnore && (
+                                    <Tooltip>
+                                      <TooltipTrigger className="">
+                                        <LoaderCircleIcon size={20} />
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xl">
+                                        로드되지 않은 탭 무시
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
                                   {item.rule.playingTabIgnore && (
 
                                     <Tooltip>
@@ -461,7 +481,7 @@ export function Setting() {
                                         <VolumeIcon size={20} />
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-xl">
-                                        재생중 무시
+                                        재생중 종료
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
@@ -475,6 +495,16 @@ export function Setting() {
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
+                                  {item.rule.containerTabIgnore && (
+                                    <Tooltip>
+                                      <TooltipTrigger className="">
+                                        <ContainerIcon size={20} />
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xl">
+                                        탭 그룹 무시
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-xs">
                                   <div className="flex justify-center items-center gap-2">
@@ -483,20 +513,6 @@ export function Setting() {
                                       "잠금"}</span>
                                   </div>
                                 </TableCell>
-                                {/* <TableCell>
-                                <div className="flex flex-wrap gap-1">
-                                  {item.rule.playingTabIgnore && (
-                                    <Badge variant="default" className="text-xs">
-                                      음소거 무시
-                                    </Badge>
-                                  )}
-                                  {item.rule.pinnedTabIgnore && (
-                                    <Badge variant="default" className="text-xs">
-                                      고정 무시
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell> */}
                                 <TableCell>
                                   <Button
                                     variant="ghost"
