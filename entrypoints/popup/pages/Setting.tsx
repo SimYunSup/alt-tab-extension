@@ -51,8 +51,11 @@ import {
   TooltipProvider,
   TooltipTrigger
 } from "@/entrypoints/components/ui/tooltip"
+import { useToken } from "@/entrypoints/popup/hooks/useStorageValue";
 import { useSetting } from "../hooks/useStorageValue"
+import GoogleLogoIcon from "../../../assets/google.svg?react";
 import { DEFAULT_SETTING } from "@/utils/Setting"
+import { browser } from "#imports"
 
 const INACTIVE_TYPE_INFO = {
   window: {
@@ -60,7 +63,7 @@ const INACTIVE_TYPE_INFO = {
     description: "Chrome/Edge에서는 탭 변경 시, Firefox에서는 윈도우 변경 시 탭이 inactive 상태로 간주됩니다.",
     icon: AppWindowMacIcon
   },
-  visiblity: {
+  visibility: {
     label: "탭 변경 시",
     description: "탭 변경 시 탭이 inactive 상태로 간주됩니다.",
     icon: RefreshCcwIcon
@@ -73,6 +76,7 @@ const INACTIVE_TYPE_INFO = {
 } as const;
 
 export function Setting() {
+  const hasToken = useToken();
   const {
     isLoading,
     settings,
@@ -90,8 +94,16 @@ export function Setting() {
       unloadTabIgnore: false,
       playingTabIgnore: false,
       pinnedTabIgnore: false,
+      containerTabIgnore: false,
     },
-  })
+  });
+
+  const onClickLoginButton = () => {
+    browser.identity.launchWebAuthFlow({
+      url: `${import.meta.env.VITE_OAUTH_BASE_URL}/oauth/google`,
+      interactive: true,
+    }, response => console.log(response));
+  }
 
   const handleCloseRulesChange = (field: keyof CloseRules, value: any) => {
     if (!settings) return;
@@ -107,7 +119,7 @@ export function Setting() {
   const addBlocklistItem = () => {
     if (!settings) return;
     if (!newBlocklistItem.url) return
-
+    console.log(newBlocklistItem);
     setSettings({
       ...settings,
       blocklist: [...settings.blocklist, { ...newBlocklistItem }],
@@ -118,8 +130,10 @@ export function Setting() {
       rule: {
         idleCondition: "window",
         idleThreshold: 60,
+        unloadTabIgnore: false,
         playingTabIgnore: false,
         pinnedTabIgnore: false,
+        containerTabIgnore: false,
       },
     })
   }
@@ -185,9 +199,10 @@ export function Setting() {
   return (
     <div className="w-full h-full">
       <Tabs defaultValue="close-rules" className="h-full flex flex-col">
-        <TabsList className="grid grid-cols-2 mb-4 w-full">
+        <TabsList className="grid grid-cols-3 mb-4 w-full">
           <TabsTrigger value="close-rules">닫기 규칙</TabsTrigger>
           <TabsTrigger value="blocklist">예외 사이트</TabsTrigger>
+          <TabsTrigger value="login">동기화</TabsTrigger>
         </TabsList>
 
         <TabsContent
@@ -211,7 +226,7 @@ export function Setting() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="window">윈도우 변경 시</SelectItem>
-                    <SelectItem value="visiblity">탭 숨김 시</SelectItem>
+                    <SelectItem value="visibility">탭 숨김 시</SelectItem>
                     <SelectItem value="idle">탭 활동 없을 시</SelectItem>
                   </SelectContent>
                 </Select>
@@ -292,7 +307,7 @@ export function Setting() {
                   </div>
                   <Switch
                     id="container-tab-ignore"
-                    checked={settings.closeRules.containerTabIgnore}
+                    checked={_settings.closeRules.containerTabIgnore}
                     onCheckedChange={(checked) => handleCloseRulesChange("containerTabIgnore", checked)}
                   />
                 </div>
@@ -350,7 +365,7 @@ export function Setting() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="window">윈도우 변경 시</SelectItem>
-                        <SelectItem value="visiblity">탭 숨김 시</SelectItem>
+                        <SelectItem value="visibility">탭 숨김 시</SelectItem>
                         <SelectItem value="idle">활동 없을 시</SelectItem>
                       </SelectContent>
                     </Select>
@@ -410,7 +425,7 @@ export function Setting() {
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="blocklist-pinned-tab-ignore"
-                          checked={newBlocklistItem.rule.pinnedTabIgnore}
+                          checked={newBlocklistItem.rule.containerTabIgnore}
                           onCheckedChange={(checked) => handleNewBlocklistItemChange("rule.containerTabIgnore", checked)}
                         />
                         <Label htmlFor="blocklist-pinned-tab-ignore">컨테이너 탭 무시</Label>
@@ -433,20 +448,20 @@ export function Setting() {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="text-xs w-[100px]">URL</TableHead>
-                            <TableHead className="text-xs w-[150px]">비활성 조건</TableHead>
+                            <TableHead className="text-xs w-[120px]">비활성 조건</TableHead>
                             <TableHead className="text-xs">비활성 시간</TableHead>
                             {/* <TableHead className="text-xs">옵션</TableHead> */}
                             <TableHead className="w-[100px] text-xs">관리</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {settings.blocklist.map((item, index) => {
+                          {_settings.blocklist.map((item, index) => {
                             const Icon = INACTIVE_TYPE_INFO[item.rule.idleCondition].icon;
                             return (
                               <TableRow key={index}>
-                                <TableCell className="max-w-[100px] w-full">
+                                <TableCell className="w-[100px]">
                                   <Tooltip>
-                                    <TooltipTrigger className="w-full text-xs font-medium text-ellipsis text-start">
+                                    <TooltipTrigger className="w-[100px] text-xs font-medium text-ellipsis text-start overflow-hidden whitespace-nowrap">
                                       {item.url}
                                     </TooltipTrigger>
                                     <TooltipContent className="max-w-xl">
@@ -454,20 +469,20 @@ export function Setting() {
                                     </TooltipContent>
                                   </Tooltip>
                                 </TableCell>
-                                <TableCell className="flex gap-1 w-[150px]">
+                                <TableCell className="w-[120px]">
                                   <Tooltip>
-                                    <TooltipTrigger className="">
-                                      <Icon size={20} />
+                                    <TooltipTrigger className="mr-1">
+                                      <Icon size={16} />
                                     </TooltipTrigger>
                                     <TooltipContent className="max-w-xl">
                                       {INACTIVE_TYPE_INFO[item.rule.idleCondition].label}
                                     </TooltipContent>
-                                  </Tooltip>ㄴ
+                                  </Tooltip>
 
                                   {item.rule.unloadTabIgnore && (
                                     <Tooltip>
-                                      <TooltipTrigger className="">
-                                        <LoaderCircleIcon size={20} />
+                                      <TooltipTrigger className="mr-1">
+                                        <LoaderCircleIcon size={16} />
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-xl">
                                         로드되지 않은 탭 무시
@@ -477,8 +492,8 @@ export function Setting() {
                                   {item.rule.playingTabIgnore && (
 
                                     <Tooltip>
-                                      <TooltipTrigger className="">
-                                        <VolumeIcon size={20} />
+                                      <TooltipTrigger className="mr-1">
+                                        <VolumeIcon size={16} />
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-xl">
                                         재생중 종료
@@ -487,8 +502,8 @@ export function Setting() {
                                   )}
                                   {item.rule.pinnedTabIgnore && (
                                     <Tooltip>
-                                      <TooltipTrigger className="">
-                                        <PinOffIcon size={20} />
+                                      <TooltipTrigger className="mr-1">
+                                        <PinOffIcon size={16} />
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-xl">
                                         핀 무시
@@ -497,8 +512,8 @@ export function Setting() {
                                   )}
                                   {item.rule.containerTabIgnore && (
                                     <Tooltip>
-                                      <TooltipTrigger className="">
-                                        <ContainerIcon size={20} />
+                                      <TooltipTrigger className="mr-1">
+                                        <ContainerIcon size={16} />
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-xl">
                                         탭 그룹 무시
@@ -544,6 +559,26 @@ export function Setting() {
               </Button>
             </CardFooter>
           </Card>
+        </TabsContent>
+
+        <TabsContent
+          value="login"
+          className="h-full pb-2"
+        >
+          {hasToken ? (
+            <Button
+              variant="secondary"
+              onClick={onClickLoginButton}
+              className="flex items-center gap-2 cursor-pointer"
+            >
+              <GoogleLogoIcon />
+              구글 로그인
+            </Button>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <span className="text-sm text-slate-500">로그인 상태입니다.</span>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

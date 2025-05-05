@@ -1,12 +1,12 @@
-import { defineContentScript } from "#imports";
+import { browser, defineContentScript } from "#imports";
+import { settingStorage } from "@/utils/storage";
 import { allowWindowMessaging, onMessage, sendMessage } from "webext-bridge/content-script";
 
 export default defineContentScript({
   matches: ["<all_urls>"],
   runAt: "document_end",
   registration: "manifest",
-  main() {
-    let intervalId: ReturnType<typeof setInterval> | null = null;
+  async main() {
     allowWindowMessaging("background");
     onMessage("get-tab-info", async () => {
       const tabInfo = {
@@ -21,14 +21,26 @@ export default defineContentScript({
       }
       return tabInfo;
     });
-    let idleDetector: IdleDetector | null;
+    let idleDetector: IdleDetector | null = null;
     let controller = new AbortController();
-    onMessage("refresh-interval", async (message) => {
-      const { type, tabId, interval, enabled } = message.data;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    async function runRefreshInterval({
+      tabId,
+      enabled,
+      interval,
+    }: {
+      tabId: number;
+      enabled?: boolean;
+      interval: number;
+    }) {
+      const url = window.location.href;
+      const settings = await settingStorage.getValue();
+      const closeRule = settings?.blocklist.find((block) => url?.startsWith(block.url))?.rule
+      ?? settings.closeRules;
       if (!enabled) {
         if (intervalId) {
           clearInterval(intervalId);
-          intervalId = null;
           return;
         } else if (idleDetector) {
           controller.abort();
@@ -36,11 +48,11 @@ export default defineContentScript({
           return;
         }
       }
-      if (type !== "idle") {
+      if (closeRule.idleCondition !== "idle") {
         controller.abort();
         idleDetector = null;
       }
-      if (type === "idle") {
+      if (closeRule.idleCondition === "idle") {
         controller = new AbortController();
 
         if (await IdleDetector.requestPermission() !== "granted") {
@@ -56,7 +68,7 @@ export default defineContentScript({
           threshold: interval,
           signal: controller.signal
         });
-      } else if (type === "visiblity") {
+      } else if (closeRule.idleCondition === "visibility") {
         setInterval(() => {
           if (!document.hidden) {
             sendMessage("refresh-tab", { tabId }, "background");
@@ -69,7 +81,14 @@ export default defineContentScript({
         }
         document.addEventListener("visibilitychange", onVisibilityChange, { signal: controller.signal });
       }
+    }
+    onMessage("refresh-interval", async (message) => {
+      const { tabId, interval, enabled } = message.data;
+      await runRefreshInterval({
+        tabId: tabId,
+        enabled,
+        interval,
+      });
     });
   },
 });
-

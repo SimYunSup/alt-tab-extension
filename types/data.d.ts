@@ -1,4 +1,4 @@
-export type InactiveType = "window" | "visiblity" | "idle";
+export type InactiveType = "window" | "visibility" | "idle";
 
 export interface CloseRules {
   idleCondition: InactiveType; // 윈도우 바뀔 시 inactive, 탭이 안 보여지면 inactive, 요청이 없으면 inactive

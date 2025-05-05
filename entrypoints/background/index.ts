@@ -13,6 +13,7 @@ import { currentTabStorage, settingStorage, accessTokenStorage, refreshTokenStor
 const DEFAULT_INTERVAL = 10_000;
 
 export default defineBackground(() => {
+  let intervalResult: [string, boolean][] = [];
   async function init() {
     let listClearInterval: () => void = () => { };
     await initTab();
@@ -58,10 +59,14 @@ export default defineBackground(() => {
       if (!tab.id) {
         return;
       }
+      const setting = await getSetting();
       let tabs = await currentTabStorage.getValue();
       tabs = tabs ?? {};
       const currentTabInfo = convertToClientTabInfo(tab);
+
       tabs[currentTabInfo.id] = currentTabInfo;
+      const result = addRefreshInterval(currentTabInfo, setting);
+      intervalResult.push([currentTabInfo.id, result]);
       await currentTabStorage.setValue(tabs);
     });
     browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
@@ -69,6 +74,17 @@ export default defineBackground(() => {
       tabs = tabs ?? {};
       const currentTabInfo = convertToClientTabInfo(tab);
       tabs[tabId] = currentTabInfo;
+
+      if (changeInfo.status === "complete") {
+        const setting = await getSetting();
+        const result = addRefreshInterval(currentTabInfo, setting);
+        const index = intervalResult.findIndex(([id]) => id === String(tabId));
+        if (index !== -1) {
+          intervalResult[index][1] = result;
+        } else {
+          intervalResult.push([String(tabId), result]);
+        }
+      }
       await currentTabStorage.setValue(tabs);
     });
     browser.tabs.onReplaced.addListener(async (tabId, removedTabId) => {
@@ -81,6 +97,9 @@ export default defineBackground(() => {
       if (currentTabInfo) {
         delete tabs[removedTabId];
         tabs[tabId] = currentTabInfo;
+        const setting = await getSetting();
+        const result = addRefreshInterval(currentTabInfo, setting);
+        intervalResult.push([String(tabId), result]);
         await currentTabStorage.setValue(tabs);
       }
     })
@@ -130,7 +149,7 @@ export default defineBackground(() => {
       } else {
         browser.tabs.onActivated.removeListener(onActivated);
       }
-      const intervalResult = clientTabArray.map((tab) => {
+      intervalResult = clientTabArray.map((tab) => {
         const success = addRefreshInterval(tab, setting);
         return [tab.id, success] as const;
       });
@@ -179,9 +198,9 @@ export default defineBackground(() => {
         enabled: setting.closeRules.idleThreshold > 0,
       }, `content-script@${tab.id ?? 0}`);
       return true;
-    } else if (setting.closeRules.idleCondition === "visiblity") {
+    } else if (setting.closeRules.idleCondition === "visibility") {
       sendMessage("refresh-interval", {
-        type: "visiblity",
+        type: "visibility",
         tabId: Number(tab.id),
         interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
         enabled: setting.closeRules.idleThreshold > 0,

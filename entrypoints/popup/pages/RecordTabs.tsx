@@ -16,7 +16,8 @@ function useRecordTabs(now: number) {
     () => db.recordTabs
       .where("lastActiveAt")
       .aboveOrEqual(now - 30 * 24 * 60 * 60 * 1000)
-      .toArray(),
+      .reverse()
+      .sortBy("-lastActiveAt"),
     [now],
     [] as RecordTabInfo[],
   );
