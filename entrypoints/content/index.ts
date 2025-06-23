@@ -1,4 +1,5 @@
 import { browser, defineContentScript } from "#imports";
+import { getURLSetting } from "@/utils/Setting";
 import { settingStorage } from "@/utils/storage";
 import { allowWindowMessaging, onMessage, sendMessage } from "webext-bridge/content-script";
 
@@ -36,8 +37,7 @@ export default defineContentScript({
     }) {
       const url = window.location.href;
       const settings = await settingStorage.getValue();
-      const closeRule = settings?.blocklist.find((block) => url?.startsWith(block.url))?.rule
-      ?? settings.closeRules;
+      const closeRule = getURLSetting(settings, url);
       if (!enabled) {
         if (intervalId) {
           clearInterval(intervalId);

@@ -24,8 +24,40 @@ export default defineBackground(() => {
       listClearInterval();
       await initTab();
     });
+    async function refreshTokens() {
+      const accessToken = accessTokenStorage.getValue();
+      const refreshToken = refreshTokenStorage.getValue();
+      if (!accessToken || !refreshToken) {
+        await accessTokenStorage.removeValue();
+        await refreshTokenStorage.removeValue();
+      }
+      const response = await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/refresh-tokens`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          accessToken,
+          refreshToken,
+        }),
+      });
+      if (!response.ok) {
+        console.error("Failed to refresh tokens", response.statusText);
+        await accessTokenStorage.removeValue();
+        await refreshTokenStorage.removeValue();
+        return;
+      }
+      const data = await response.json() as { accessToken?: string; refreshToken?: string; };
+      if (data.accessToken && data.refreshToken) {
+        accessTokenStorage.setValue(data.accessToken);
+        refreshTokenStorage.setValue(data.refreshToken);
+      } else {
+        console.error("Invalid token response", data);
+      }
+    }
     browser.runtime.onStartup.addListener(async () => {
       await initTab();
+      await refreshTokens();
     });
     // Oauth flow
     function detectOauthFlow(_url: string) {
@@ -45,6 +77,7 @@ export default defineBackground(() => {
       }
       detectOauthFlow(tab.url);
       await browser.tabs.remove(tab.id!);
+      void refreshTokens();
     });
     browser.tabs.onUpdated.addListener(async (_, __, tab) => {
       if (!tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL) || !tab.active) {
@@ -122,7 +155,7 @@ export default defineBackground(() => {
           return;
         }
         for (const [tabId, tabInfo] of Object.entries(tabs)) {
-          const closeRule = setting.blocklist.find((block) => tabInfo.url.startsWith(block.url))?.rule
+          const closeRule = Object.entries(setting.blocklist).find(([url]) => tabInfo.url.startsWith(url))?.[1]
             ?? setting.closeRules;
           const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
           try {
@@ -226,7 +259,7 @@ export default defineBackground(() => {
 async function onActivated(info: chrome.tabs.TabActiveInfo) {
   const tab = await browser.tabs.get(info.tabId);
   const settings = await getSetting();
-  const closeRule = settings?.blocklist.find((block) => tab.url?.startsWith(block.url))?.rule
+  const closeRule = Object.entries(settings?.blocklist).find(([url]) => tab.url?.startsWith(url))?.[1]
     ?? settings.closeRules;
   if (closeRule.idleThreshold === 0 ||
     closeRule.idleCondition !== "window") {

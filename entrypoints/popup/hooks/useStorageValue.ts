@@ -110,6 +110,9 @@ export const useToken = () => {
       unwatch();
     };
   }, []);
-
-  return token;
+  const resetToken = async () => {
+    await accessTokenStorage.setValue(null);
+    setToken(null);
+  };
+  return [token, resetToken] as const;
 }

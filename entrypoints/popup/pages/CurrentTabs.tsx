@@ -1,5 +1,5 @@
 import type { ClientTabInfo } from "@/utils/Tab";
-import type { Setting } from "@/utils/Setting";
+import { getURLSetting, type Setting } from "@/utils/Setting";
 
 import React from "react";
 import { browser } from 'wxt/browser';
@@ -7,6 +7,7 @@ import {
   ArchiveIcon,
   Clock,
   Search,
+  XIcon,
 } from "lucide-react";
 import { Badge } from "@/entrypoints/components/ui/badge";
 import { Input } from "@/entrypoints/components/ui/input";
@@ -15,7 +16,7 @@ import { ScrollArea } from "@/entrypoints/components/ui/scroll-area";
 import { Separator } from "@/entrypoints/components/ui/separator";
 import { cn } from "@/utils";
 import { isClosableTab, saveTabIndexedDB } from "@/utils/Tab";
-import { useSetting, useTabs } from "../hooks/useStorageValue";
+import { useSetting, useTabs, useToken } from "../hooks/useStorageValue";
 
 const formatRemainingTime = (milliseconds: number) => {
   const seconds = Math.floor(milliseconds / 1000)
@@ -75,13 +76,12 @@ function TabItem({
   if (!settings) {
     return null;
   }
-  const closeRule = settings?.blocklist.find((block) => tab.url.startsWith(block.url))?.rule
-    ?? settings.closeRules;
+  const closeRule = getURLSetting(settings, tab.url);
   const isLocked = closeRule.idleThreshold === 0 ||
-     !closeRule.pinnedTabIgnore && tab.isPinned ||
-      closeRule.unloadTabIgnore && tab.isUnloaded ||
-      !closeRule.playingTabIgnore && tab.isAudible ||
-      closeRule.containerTabIgnore && tab.groupId
+    !closeRule.pinnedTabIgnore && tab.isPinned ||
+    closeRule.unloadTabIgnore && tab.isUnloaded ||
+    !closeRule.playingTabIgnore && tab.isAudible ||
+    closeRule.containerTabIgnore && tab.groupId
     ;
   return (
     <button
@@ -130,6 +130,7 @@ function TabItem({
 }
 
 export const CurrentTabs = () => {
+  const [token] = useToken();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTabs, setSelectedTabs] = React.useState<Set<string>>(new Set());
   const {
@@ -153,8 +154,7 @@ export const CurrentTabs = () => {
           return;
         }
         for (const [tabId, tabInfo] of Object.entries(tabs)) {
-          const closeRule = settings.blocklist.find((block) => tabInfo.url.startsWith(block.url))?.rule
-            ?? settings.closeRules;
+          const closeRule = getURLSetting(settings, tabInfo.url);
           const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
           try {
             const tab = await browser.tabs.get(Number(tabId));
@@ -193,6 +193,18 @@ export const CurrentTabs = () => {
       <div className="p-4 border-b flex flex-col gap-2">
         <div className="flex items-center">
           <h2 className="text-lg font-medium mr-auto">현재 기기의 탭</h2>
+          {token ? (
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-8 h-6 mr-2"
+              disabled={selectedTabs.size === 0 || isLoading}
+            >
+              <span aria-hidden>탭 그룹</span>
+              <ArchiveIcon className="size-4" />
+              <span className="sr-only">선택한 탭 그룹으로 저장하기</span>
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="icon"
@@ -200,7 +212,7 @@ export const CurrentTabs = () => {
             onClick={onClickCloseButton}
             disabled={selectedTabs.size === 0 || isLoading}
           >
-            <ArchiveIcon className="size-4" /><span className="sr-only">닫기</span>
+            <XIcon className="size-4" /><span className="sr-only">닫기</span>
           </Button>
           {selectedTabs.size > 0 ? (
             <Badge variant="default" className="font-normal h-6">

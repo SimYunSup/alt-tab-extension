@@ -7,10 +7,7 @@ export interface Setting {
   closeRules: CloseRules;
   device?: string;
   refreshInterval?: number;
-  blocklist: {
-    url: string;
-    rule: Omit<CloseRules, "ignoringGrouptabs" | "ignoreContainerTabs">;
-  }[]; // 다른 규칙을 가지는 사이트
+  blocklist: Record<string, Omit<CloseRules, "ignoringGrouptabs" | "ignoreContainerTabs">>; // 다른 규칙을 가지는 사이트
 }
 
 export const DEFAULT_SETTING: Setting = {
@@ -23,41 +20,51 @@ export const DEFAULT_SETTING: Setting = {
     containerTabIgnore: false,
   },
   device: "",
-  blocklist: [
-    ...import.meta.env.BROWSER === "chrome" ? [
-      {
-        url: "chrome://",
-        rule: {
+  blocklist: {
+    ...import.meta.env.BROWSER === "chrome" ? {
+        "chrome://": {
           idleCondition: "window",
           idleThreshold: 0,
         } satisfies CloseRules,
-      },
-      {
-        url: "chrome-extension://",
-        rule: {
+        "chrome-extension://": {
           idleCondition: "window",
           idleThreshold: 0,
         } satisfies CloseRules,
-      },
-    ] : [],
-    ...import.meta.env.BROWSER === "firefox" ? [
-      {
-        url: "about:",
-        rule: {
-          idleCondition: "window",
-          idleThreshold: 0,
-        } satisfies CloseRules,
-      },
-      {
-        url: "firefox://",
-        rule: {
-          idleCondition: "window",
-          idleThreshold: 0,
-        } satisfies CloseRules,
-      }
-    ] : [],
-  ],
+      } : {},
+    ...import.meta.env.BROWSER === "firefox" ? {
+      "about:": {
+        idleCondition: "window",
+        idleThreshold: 0,
+      } satisfies CloseRules,
+      "firefox://": {
+        idleCondition: "window",
+        idleThreshold: 0,
+      } satisfies CloseRules,
+    } : {},
+  },
 };
+
+export async function initSettingIfLogin(token: string | null) {
+  if (!token) {
+    return;
+  }
+  const setting = await fetch(`${import.meta.env.VITE_API_URL}/stash-settings`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const settingJson = await setting.json() as Setting | null;
+  if (!settingJson) {
+    await settingStorage.setValue(DEFAULT_SETTING);
+  } else {
+    await settingStorage.setValue({
+      ...DEFAULT_SETTING,
+      ...settingJson,
+    });
+  }
+
+}
 
 export async function getSetting(): Promise<Setting> {
   const _setting = await settingStorage.getValue();
@@ -68,5 +75,5 @@ export async function getSetting(): Promise<Setting> {
 }
 
 export function getURLSetting(setting: Setting, url: string) {
-  return setting.blocklist.find((block) => url.startsWith(block.url))?.rule ?? setting.closeRules;
+  return Object.entries(setting.blocklist).find(([blockUrl]) => url.startsWith(blockUrl))?.[1] ?? setting.closeRules;
 }

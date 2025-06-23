@@ -53,9 +53,8 @@ import {
 } from "@/entrypoints/components/ui/tooltip"
 import { useToken } from "@/entrypoints/popup/hooks/useStorageValue";
 import { useSetting } from "../hooks/useStorageValue"
-import GoogleLogoIcon from "../../../assets/google.svg?react";
 import { DEFAULT_SETTING } from "@/utils/Setting"
-import { browser } from "#imports"
+import { Login } from "@/entrypoints/components/Login"
 
 const INACTIVE_TYPE_INFO = {
   window: {
@@ -76,7 +75,7 @@ const INACTIVE_TYPE_INFO = {
 } as const;
 
 export function Setting() {
-  const hasToken = useToken();
+  const [token] = useToken();
   const {
     isLoading,
     settings,
@@ -86,7 +85,11 @@ export function Setting() {
   React.useEffect(() => {
     setSettings(settings ?? DEFAULT_SETTING);
   }, [settings]);
-  const [newBlocklistItem, setNewBlocklistItem] = React.useState<SettingType["blocklist"][number]>({
+
+  const [newBlocklistItem, setNewBlocklistItem] = React.useState<{
+    url: string;
+    rule: SettingType["blocklist"][string];
+  }>({
     url: "",
     rule: {
       idleCondition: "window" as InactiveType,
@@ -98,12 +101,6 @@ export function Setting() {
     },
   });
 
-  const onClickLoginButton = () => {
-    browser.identity.launchWebAuthFlow({
-      url: `${import.meta.env.VITE_OAUTH_BASE_URL}/oauth/google`,
-      interactive: true,
-    }, response => console.log(response));
-  }
 
   const handleCloseRulesChange = (field: keyof CloseRules, value: any) => {
     if (!settings) return;
@@ -118,13 +115,17 @@ export function Setting() {
 
   const addBlocklistItem = () => {
     if (!settings) return;
-    if (!newBlocklistItem.url) return
-    console.log(newBlocklistItem);
-    setSettings({
-      ...settings,
-      blocklist: [...settings.blocklist, { ...newBlocklistItem }],
-    })
-
+    if (!newBlocklistItem.url) return;
+    setSettings((prev) => {
+      const newBlocklist = { ...prev.blocklist };
+      newBlocklist[newBlocklistItem.url] = {
+        ...newBlocklistItem.rule,
+      };
+      return {
+        ...prev,
+        blocklist: newBlocklist,
+      };
+    });
     setNewBlocklistItem({
       url: "",
       rule: {
@@ -140,8 +141,8 @@ export function Setting() {
 
   const removeBlocklistItem = (index: number) => {
     if (!settings) return;
-    const newBlocklist = [...settings.blocklist]
-    newBlocklist.splice(index, 1)
+    const newBlocklist = { ...settings.blocklist };
+    delete newBlocklist[index];
     setSettings({
       ...settings,
       blocklist: newBlocklist,
@@ -455,17 +456,17 @@ export function Setting() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {_settings.blocklist.map((item, index) => {
-                            const Icon = INACTIVE_TYPE_INFO[item.rule.idleCondition].icon;
+                          {Object.entries(_settings.blocklist).map(([url, rule], index) => {
+                            const Icon = INACTIVE_TYPE_INFO[rule.idleCondition].icon;
                             return (
                               <TableRow key={index}>
                                 <TableCell className="w-[100px]">
                                   <Tooltip>
                                     <TooltipTrigger className="w-[100px] text-xs font-medium text-ellipsis text-start overflow-hidden whitespace-nowrap">
-                                      {item.url}
+                                      {url}
                                     </TooltipTrigger>
                                     <TooltipContent className="max-w-xl">
-                                      {item.url}
+                                      {url}
                                     </TooltipContent>
                                   </Tooltip>
                                 </TableCell>
@@ -475,11 +476,11 @@ export function Setting() {
                                       <Icon size={16} />
                                     </TooltipTrigger>
                                     <TooltipContent className="max-w-xl">
-                                      {INACTIVE_TYPE_INFO[item.rule.idleCondition].label}
+                                      {INACTIVE_TYPE_INFO[rule.idleCondition].label}
                                     </TooltipContent>
                                   </Tooltip>
 
-                                  {item.rule.unloadTabIgnore && (
+                                  {rule.unloadTabIgnore && (
                                     <Tooltip>
                                       <TooltipTrigger className="mr-1">
                                         <LoaderCircleIcon size={16} />
@@ -489,7 +490,7 @@ export function Setting() {
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
-                                  {item.rule.playingTabIgnore && (
+                                  {rule.playingTabIgnore && (
 
                                     <Tooltip>
                                       <TooltipTrigger className="mr-1">
@@ -500,7 +501,7 @@ export function Setting() {
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
-                                  {item.rule.pinnedTabIgnore && (
+                                  {rule.pinnedTabIgnore && (
                                     <Tooltip>
                                       <TooltipTrigger className="mr-1">
                                         <PinOffIcon size={16} />
@@ -510,7 +511,7 @@ export function Setting() {
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
-                                  {item.rule.containerTabIgnore && (
+                                  {rule.containerTabIgnore && (
                                     <Tooltip>
                                       <TooltipTrigger className="mr-1">
                                         <ContainerIcon size={16} />
@@ -523,8 +524,8 @@ export function Setting() {
                                 </TableCell>
                                 <TableCell className="text-xs">
                                   <div className="flex justify-center items-center gap-2">
-                                    <span>{item.rule.idleThreshold ?
-                                      formatTime(item.rule.idleThreshold) :
+                                    <span>{rule.idleThreshold ?
+                                      formatTime(rule.idleThreshold) :
                                       "잠금"}</span>
                                   </div>
                                 </TableCell>
@@ -565,20 +566,7 @@ export function Setting() {
           value="login"
           className="h-full pb-2"
         >
-          {hasToken ? (
-            <Button
-              variant="secondary"
-              onClick={onClickLoginButton}
-              className="flex items-center gap-2 cursor-pointer"
-            >
-              <GoogleLogoIcon />
-              구글 로그인
-            </Button>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <span className="text-sm text-slate-500">로그인 상태입니다.</span>
-            </div>
-          )}
+          <Login />
         </TabsContent>
       </Tabs>
     </div>
