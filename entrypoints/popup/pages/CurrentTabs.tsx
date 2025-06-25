@@ -141,12 +141,15 @@ export const CurrentTabs = () => {
   const {
     settings,
   } = useSetting();
+
   const filteredTabs = React.useDeferredValue(Object.fromEntries(Object.entries(tabs ?? {}).filter(([_, tabInfo]) => {
     return tabInfo.title?.toLowerCase().includes(searchQuery.toLowerCase()) ?? true;
   })));
+
   React.useEffect(() => {
     setSelectedTabs(new Set());
   }, [searchQuery, tabs]);
+
   React.useEffect(() => {
     const intervalId = setInterval(() => {
       async function run() {

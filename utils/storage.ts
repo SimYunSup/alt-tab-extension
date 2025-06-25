@@ -1,4 +1,4 @@
-import type { Setting } from "./Setting";
+import { DEFAULT_SETTING, type Setting } from "./Setting";
 import type { ClientTabInfo } from "./Tab";
 import type { CloseRules } from "@/types/data";
 
@@ -14,57 +14,7 @@ export const currentTabStorage = storage.defineItem<Record<string, ClientTabInfo
 export const settingStorage = storage.defineItem<Setting>(
   "local:settings",
   {
-    fallback: {
-      closeRules: {
-        idleCondition: "window",
-        idleThreshold: 1,
-        pinnedTabIgnore: false,
-        playingTabIgnore: false,
-        containerTabIgnore: false,
-      },
-      device: "",
-      blocklist: [
-        ...import.meta.env.BROWSER === "chrome" ? [
-          {
-            url: "chrome://",
-            rule: {
-              idleCondition: "window",
-              idleThreshold: 0,
-            } satisfies CloseRules,
-          },
-          {
-            url: "chrome-extension://",
-            rule: {
-              idleCondition: "window",
-              idleThreshold: 0,
-            } satisfies CloseRules,
-          },
-          {
-            url: "about:",
-            rule: {
-              idleCondition: "window",
-              idleThreshold: 0,
-            } satisfies CloseRules,
-          },
-        ] : [],
-        ...import.meta.env.BROWSER === "firefox" ? [
-          {
-            url: "about:",
-            rule: {
-              idleCondition: "window",
-              idleThreshold: 0,
-            } satisfies CloseRules,
-          },
-          {
-            url: "firefox://",
-            rule: {
-              idleCondition: "window",
-              idleThreshold: 0,
-            } satisfies CloseRules,
-          }
-        ] : [],
-      ],
-    },
+    fallback: DEFAULT_SETTING,
   }
 );
 

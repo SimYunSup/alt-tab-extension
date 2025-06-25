@@ -17,6 +17,7 @@ declare module "webext-bridge" {
     "refresh-tab": ProtocolWithReturn<{ tabId: number }, void>;
     "refresh-interval": ProtocolWithReturn<{ tabId: number; type: InactiveType; interval: number; enabled?: boolean }, void>;
     "get-tab-info": ProtocolWithReturn<void, { storage: StorageInfo, scrollPosition: ScrollPosition } | null>;
+    "send-tab-group": ProtocolWithReturn<{ tabIds: number[]; }, boolean>;
   }
 }
 declare global {

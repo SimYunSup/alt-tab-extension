@@ -4,10 +4,11 @@ import type { Setting } from "@/utils/Setting";
 import { browser } from 'wxt/browser';
 import { defineBackground } from "#imports";
 import { onMessage, sendMessage } from "webext-bridge/background";
-import { convertToClientTabInfo, saveTabIndexedDB } from "@/utils/Tab";
+import { convertTabInfoServer, convertToClientTabInfo, saveTabIndexedDB } from "@/utils/Tab";
 import { isClosableTab } from "@/utils/Tab";
-import { getSetting } from "@/utils/Setting";
+import { getSetting, getURLSetting } from "@/utils/Setting";
 import { currentTabStorage, settingStorage, accessTokenStorage, refreshTokenStorage } from "@/utils/storage";
+import { archiveTabGroup } from "@/utils/ArchivedTabGroup";
 
 
 const DEFAULT_INTERVAL = 10_000;
@@ -155,8 +156,8 @@ export default defineBackground(() => {
           return;
         }
         for (const [tabId, tabInfo] of Object.entries(tabs)) {
-          const closeRule = Object.entries(setting.blocklist).find(([url]) => tabInfo.url.startsWith(url))?.[1]
-            ?? setting.closeRules;
+          const closeRule = Object.entries(setting.whitelistUrls).find(([url]) => tabInfo.url.startsWith(url))?.[1]
+            ?? setting.globalRule;
           const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
           try {
             const tab = await browser.tabs.get(Number(tabId));
@@ -177,7 +178,7 @@ export default defineBackground(() => {
       const setting = await getSetting();
       const clientTabArray = tabs.map((tab) => convertToClientTabInfo(tab));
       await currentTabStorage.setValue(Object.fromEntries(clientTabArray.map((tab) => [tab.id, tab])));
-      if (setting.closeRules.idleCondition === "window") {
+      if (setting.globalRule.idleCondition === "window") {
         browser.tabs.onActivated.addListener(onActivated);
       } else {
         browser.tabs.onActivated.removeListener(onActivated);
@@ -188,7 +189,7 @@ export default defineBackground(() => {
       });
       const sharedIntervalId = setInterval(async () => {
         const setting = await getSetting();
-        if (setting.closeRules.idleCondition !== "window") {
+        if (setting.globalRule.idleCondition !== "window") {
           return;
         }
         const activeTabs = await browser.tabs.query({ active: true });
@@ -220,7 +221,7 @@ export default defineBackground(() => {
   }
 
   function addRefreshInterval(tab: ClientTabInfo, setting: Setting) {
-    if (setting.closeRules.idleCondition === "idle" && (
+    if (setting.globalRule.idleCondition === "idle" && (
       import.meta.env.CHROME ||
       import.meta.env.EDGE
     )) {
@@ -228,15 +229,15 @@ export default defineBackground(() => {
         type: "idle",
         tabId: Number(tab.id),
         interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
-        enabled: setting.closeRules.idleThreshold > 0,
+        enabled: setting.globalRule.idleThreshold > 0,
       }, `content-script@${tab.id ?? 0}`);
       return true;
-    } else if (setting.closeRules.idleCondition === "visibility") {
+    } else if (setting.globalRule.idleCondition === "visibility") {
       sendMessage("refresh-interval", {
         type: "visibility",
         tabId: Number(tab.id),
         interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
-        enabled: setting.closeRules.idleThreshold > 0,
+        enabled: setting.globalRule.idleThreshold > 0,
       }, `content-script@${tab.id ?? 0}`);
       return true;
     }
@@ -253,14 +254,24 @@ export default defineBackground(() => {
     }
     await currentTabStorage.setValue(clientTabs);
   });
+  onMessage("send-tab-group", async (message) => {
+    const { tabIds } = message.data;
+    try {
+      const tabs = await Promise.all(tabIds.map((tabId) => browser.tabs.get(tabId)));
+      const tabInfos = await Promise.all(tabs.map((tab) => convertTabInfoServer(tab, convertToClientTabInfo(tab))));
+      await archiveTabGroup(tabInfos);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  });
   init();
 });
 
 async function onActivated(info: chrome.tabs.TabActiveInfo) {
   const tab = await browser.tabs.get(info.tabId);
   const settings = await getSetting();
-  const closeRule = Object.entries(settings?.blocklist).find(([url]) => tab.url?.startsWith(url))?.[1]
-    ?? settings.closeRules;
+  const closeRule = getURLSetting(settings, tab.url || "");
   if (closeRule.idleThreshold === 0 ||
     closeRule.idleCondition !== "window") {
     return;

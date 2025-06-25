@@ -88,7 +88,7 @@ export function Setting() {
 
   const [newBlocklistItem, setNewBlocklistItem] = React.useState<{
     url: string;
-    rule: SettingType["blocklist"][string];
+    rule: SettingType["whitelistUrls"][string];
   }>({
     url: "",
     rule: {
@@ -106,8 +106,8 @@ export function Setting() {
     if (!settings) return;
     setSettings((prev) => ({
       ...prev,
-      closeRules: {
-        ...prev.closeRules,
+      globalRule: {
+        ...prev.globalRule,
         [field]: value,
       }
     }));
@@ -117,13 +117,13 @@ export function Setting() {
     if (!settings) return;
     if (!newBlocklistItem.url) return;
     setSettings((prev) => {
-      const newBlocklist = { ...prev.blocklist };
+      const newBlocklist = { ...prev.whitelistUrls };
       newBlocklist[newBlocklistItem.url] = {
         ...newBlocklistItem.rule,
       };
       return {
         ...prev,
-        blocklist: newBlocklist,
+        whitelistUrls: newBlocklist,
       };
     });
     setNewBlocklistItem({
@@ -141,11 +141,11 @@ export function Setting() {
 
   const removeBlocklistItem = (index: number) => {
     if (!settings) return;
-    const newBlocklist = { ...settings.blocklist };
+    const newBlocklist = { ...settings.whitelistUrls };
     delete newBlocklist[index];
     setSettings({
       ...settings,
-      blocklist: newBlocklist,
+      whitelistUrls: newBlocklist,
     })
   }
 
@@ -219,7 +219,7 @@ export function Setting() {
               <div className="space-y-2">
                 <Label htmlFor="idleCondition">비활성 조건</Label>
                 <Select
-                  value={_settings.closeRules.idleCondition}
+                  value={_settings.globalRule.idleCondition}
                   onValueChange={(value) => handleCloseRulesChange("idleCondition", value as InactiveType)}
                 >
                   <SelectTrigger id="idleCondition">
@@ -231,13 +231,13 @@ export function Setting() {
                     <SelectItem value="idle">탭 활동 없을 시</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-muted-foreground">{INACTIVE_TYPE_INFO[_settings.closeRules.idleCondition].description}</p>
+                <p className="text-sm text-muted-foreground">{INACTIVE_TYPE_INFO[_settings.globalRule.idleCondition].description}</p>
               </div>
 
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <Label htmlFor="idleThreshold">비활성 시간</Label>
-                  <span className="text-sm text-muted-foreground">{formatTime(_settings.closeRules.idleThreshold)}</span>
+                  <span className="text-sm text-muted-foreground">{formatTime(_settings.globalRule.idleThreshold)}</span>
                 </div>
                 <div className="flex gap-4 items-center">
                   <Slider
@@ -245,7 +245,7 @@ export function Setting() {
                     min={1}
                     max={240}
                     step={1}
-                    value={[_settings.closeRules.idleThreshold]}
+                    value={[_settings.globalRule.idleThreshold]}
                     onValueChange={(value) => handleCloseRulesChange("idleThreshold", value[0])}
                     className="flex-1"
                   />
@@ -253,7 +253,7 @@ export function Setting() {
                     type="number"
                     min={1}
                     max={240}
-                    value={_settings.closeRules.idleThreshold}
+                    value={_settings.globalRule.idleThreshold}
                     onChange={(e) => handleIdleThresholdInputChange(e)}
                     className="w-20"
                   />
@@ -273,7 +273,7 @@ export function Setting() {
                   </div>
                   <Switch
                     id="unload-tab-ignore"
-                    checked={_settings.closeRules.unloadTabIgnore}
+                    checked={_settings.globalRule.unloadTabIgnore}
                     onCheckedChange={(checked) => handleCloseRulesChange("unloadTabIgnore", checked)}
                   />
                 </div>
@@ -284,7 +284,7 @@ export function Setting() {
                   </div>
                   <Switch
                     id="playing-tab-ignore"
-                    checked={_settings.closeRules.playingTabIgnore}
+                    checked={_settings.globalRule.playingTabIgnore}
                     onCheckedChange={(checked) => handleCloseRulesChange("playingTabIgnore", checked)}
                   />
                 </div>
@@ -296,7 +296,7 @@ export function Setting() {
                   </div>
                   <Switch
                     id="pinned-tab-ignore"
-                    checked={_settings.closeRules.pinnedTabIgnore}
+                    checked={_settings.globalRule.pinnedTabIgnore}
                     onCheckedChange={(checked) => handleCloseRulesChange("pinnedTabIgnore", checked)}
                   />
                 </div>
@@ -308,7 +308,7 @@ export function Setting() {
                   </div>
                   <Switch
                     id="container-tab-ignore"
-                    checked={_settings.closeRules.containerTabIgnore}
+                    checked={_settings.globalRule.containerTabIgnore}
                     onCheckedChange={(checked) => handleCloseRulesChange("containerTabIgnore", checked)}
                   />
                 </div>
@@ -456,7 +456,7 @@ export function Setting() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {Object.entries(_settings.blocklist).map(([url, rule], index) => {
+                          {Object.entries(_settings.whitelistUrls).map(([url, rule], index) => {
                             const Icon = INACTIVE_TYPE_INFO[rule.idleCondition].icon;
                             return (
                               <TableRow key={index}>

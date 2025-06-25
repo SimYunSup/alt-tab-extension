@@ -4,14 +4,13 @@ import { settingStorage } from "./storage";
 export const SETTING_KEY = "setting";
 
 export interface Setting {
-  closeRules: CloseRules;
-  device?: string;
+  globalRule: CloseRules;
   refreshInterval?: number;
-  blocklist: Record<string, Omit<CloseRules, "ignoringGrouptabs" | "ignoreContainerTabs">>; // 다른 규칙을 가지는 사이트
+  whitelistUrls: Record<string, Omit<CloseRules, "ignoringGrouptabs" | "ignoreContainerTabs">>; // 다른 규칙을 가지는 사이트
 }
 
 export const DEFAULT_SETTING: Setting = {
-  closeRules: {
+  globalRule: {
     idleCondition: "window",
     idleThreshold: 1,
     unloadTabIgnore: false,
@@ -19,8 +18,7 @@ export const DEFAULT_SETTING: Setting = {
     playingTabIgnore: false,
     containerTabIgnore: false,
   },
-  device: "",
-  blocklist: {
+  whitelistUrls: {
     ...import.meta.env.BROWSER === "chrome" ? {
         "chrome://": {
           idleCondition: "window",
@@ -30,6 +28,10 @@ export const DEFAULT_SETTING: Setting = {
           idleCondition: "window",
           idleThreshold: 0,
         } satisfies CloseRules,
+          "about:": {
+            idleCondition: "window",
+            idleThreshold: 0,
+          } satisfies CloseRules,
       } : {},
     ...import.meta.env.BROWSER === "firefox" ? {
       "about:": {
@@ -63,7 +65,16 @@ export async function initSettingIfLogin(token: string | null) {
       ...settingJson,
     });
   }
-
+}
+export async function saveSetting(setting: Setting, token: string | null) {
+  await fetch(`${import.meta.env.VITE_API_URL}/stash-settings/update`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(setting),
+  });
 }
 
 export async function getSetting(): Promise<Setting> {
@@ -75,5 +86,5 @@ export async function getSetting(): Promise<Setting> {
 }
 
 export function getURLSetting(setting: Setting, url: string) {
-  return Object.entries(setting.blocklist).find(([blockUrl]) => url.startsWith(blockUrl))?.[1] ?? setting.closeRules;
+  return Object.entries(setting.whitelistUrls).find(([blockUrl]) => url.startsWith(blockUrl))?.[1] ?? setting.globalRule;
 }

@@ -13,12 +13,12 @@ function getDefaultNewTabUrl() {
 }
 
 export async function isClosableTab(tab: Browser.tabs.Tab, setting: Setting) {
-  let closeRules = setting.closeRules;
-  const blockRule = setting.blocklist.find((block) => block.url === tab.url);
+  let closeRules = setting.globalRule;
+  const blockRule = setting.whitelistUrls[tab.url ?? ""];
   if (blockRule) {
     closeRules = {
       ...closeRules,
-      ...blockRule.rule,
+      ...blockRule,
     };
   }
   if (closeRules.unloadTabIgnore && tab.status === "unloaded") {

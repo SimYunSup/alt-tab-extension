@@ -15,15 +15,6 @@
     "wxt": "wxt",
     "postinstall": "wxt prepare"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@tailwindcss/oxide",
-      "dtrace-provider",
-      "esbuild",
-      "sharp",
-      "spawn-sync"
-    ]
-  },
   "dependencies": {
     "@internationalized/date": "^3.8.2",
     "@node-rs/argon2": "^2.0.2",

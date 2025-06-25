@@ -4,7 +4,7 @@ import type { Setting } from "@/utils/Setting";
 import React from "react";
 import { browser } from 'wxt/browser';
 import { saveTabIndexedDB } from "@/utils/Tab";
-import { DEFAULT_SETTING } from "@/utils/Setting";
+import { DEFAULT_SETTING, saveSetting as _saveSetting } from "@/utils/Setting";
 import {
   accessTokenStorage,
   currentTabStorage,
@@ -59,6 +59,7 @@ export const useTabs = () => {
 
 export const useSetting = () => {
   const [isLoading, setIsLoading] = React.useState(false);
+  const [token] = useToken();
   const [settings, setSettings] = React.useState<Setting | null>(null);
   React.useEffect(() => {
     async function getSetting() {
@@ -83,6 +84,9 @@ export const useSetting = () => {
     async saveSettings(settingSetter: ((s: Setting | null) => Setting | null) | Setting | null) {
       const _settings = settingSetter instanceof Function ? settingSetter(settings) : settingSetter;
       setIsLoading(true);
+      if (token) {
+        await _saveSetting(_settings ?? DEFAULT_SETTING, token);
+      }
       await settingStorage.setValue(_settings ?? DEFAULT_SETTING);
       setSettings(_settings);
       setIsLoading(false);
