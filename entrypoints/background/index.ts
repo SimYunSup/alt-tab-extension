@@ -322,7 +322,6 @@ async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTab
   const tabInfo = await sendMessage("get-tab-info", undefined, `content-script@${tab.id ?? 0}`);
   const url = tab.url ?? getDefaultNewTabUrl();
   const urlInstance = new URL(url);
-  console.log(tabInfo);
   const cookies = await browser.cookies.getAll({
     domain: urlInstance.hostname,
   });

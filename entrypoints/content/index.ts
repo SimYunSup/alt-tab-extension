@@ -44,7 +44,6 @@ export default defineContentScript({
           y: window.scrollY,
         },
       };
-      console.log(tabInfo);
       return tabInfo;
     });
     let idleDetector: IdleDetector | null = null;
