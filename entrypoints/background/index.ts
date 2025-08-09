@@ -1,12 +1,13 @@
-import type { ClientTabInfo } from "@/utils/Tab";
-import type { Setting } from "@/utils/Setting";
+import type { Browser } from "wxt/browser";
+import type { ClientTabInfo, TabInfo } from "@/utils/Tab";
+import type { Setting } from "@/types/data";
 
 import { browser } from 'wxt/browser';
 import { defineBackground } from "#imports";
 import { onMessage, sendMessage } from "webext-bridge/background";
-import { convertTabInfoServer, convertToClientTabInfo, saveTabIndexedDB } from "@/utils/Tab";
+import { convertToClientTabInfo, getDefaultNewTabUrl, saveTabIndexedDB } from "@/utils/Tab";
 import { isClosableTab } from "@/utils/Tab";
-import { getSetting, getURLSetting } from "@/utils/Setting";
+import { getSetting, getURLSetting, initSettingIfLogin, saveSetting } from "@/utils/Setting";
 import { currentTabStorage, settingStorage, accessTokenStorage, refreshTokenStorage } from "@/utils/storage";
 import { archiveTabGroup } from "@/utils/ArchivedTabGroup";
 
@@ -25,9 +26,10 @@ export default defineBackground(() => {
       listClearInterval();
       await initTab();
     });
-    async function refreshTokens() {
-      const accessToken = accessTokenStorage.getValue();
-      const refreshToken = refreshTokenStorage.getValue();
+    // TODO: Forbidden?
+    async function refreshTokens(accessToken?: string, refreshToken?: string) {
+      accessToken = accessToken ?? await accessTokenStorage.getValue() ?? undefined;
+      refreshToken = refreshToken ?? await refreshTokenStorage.getValue() ?? undefined;
       if (!accessToken || !refreshToken) {
         await accessTokenStorage.removeValue();
         await refreshTokenStorage.removeValue();
@@ -44,8 +46,8 @@ export default defineBackground(() => {
       });
       if (!response.ok) {
         console.error("Failed to refresh tokens", response.statusText);
-        await accessTokenStorage.removeValue();
-        await refreshTokenStorage.removeValue();
+        // await accessTokenStorage.removeValue();
+        // await refreshTokenStorage.removeValue();
         return;
       }
       const data = await response.json() as { accessToken?: string; refreshToken?: string; };
@@ -59,6 +61,10 @@ export default defineBackground(() => {
     browser.runtime.onStartup.addListener(async () => {
       await initTab();
       await refreshTokens();
+      const token = await accessTokenStorage.getValue();
+      if (token) {
+        await initSettingIfLogin(token);
+      }
     });
     // Oauth flow
     function detectOauthFlow(_url: string) {
@@ -71,26 +77,41 @@ export default defineBackground(() => {
       }
       accessTokenStorage.setValue(accessToken);
       refreshTokenStorage.setValue(refreshToken);
+      return {
+        accessToken,
+        refreshToken,
+      }
     }
     browser.tabs.onCreated.addListener(async (tab) => {
       if (!tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL)) {
         return;
       }
-      detectOauthFlow(tab.url);
-      await browser.tabs.remove(tab.id!);
-      void refreshTokens();
+      const tokens = detectOauthFlow(tab.url);
+      try {
+        await browser.tabs.remove(tab.id!);
+      } catch (error) {
+        console.debug("Failed to remove tab", error);
+      }
+      void refreshTokens(tokens?.accessToken, tokens?.refreshToken);
     });
     browser.tabs.onUpdated.addListener(async (_, __, tab) => {
       if (!tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL) || !tab.active) {
         return;
       }
       detectOauthFlow(tab.url);
-      await browser.tabs.remove(tab.id!);
+      try {
+        await browser.tabs.remove(tab.id!);
+      } catch (error) {
+        console.debug("Failed to remove tab", error);
+      }
     });
 
     // Tab event
     browser.tabs.onCreated.addListener(async (tab) => {
       if (!tab.id) {
+        return;
+      }
+      if (tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL)) {
         return;
       }
       const setting = await getSetting();
@@ -107,6 +128,9 @@ export default defineBackground(() => {
       let tabs = await currentTabStorage.getValue();
       tabs = tabs ?? {};
       const currentTabInfo = convertToClientTabInfo(tab);
+      if (!currentTabInfo.id) {
+        return;
+      }
       tabs[tabId] = currentTabInfo;
 
       if (changeInfo.status === "complete") {
@@ -158,7 +182,7 @@ export default defineBackground(() => {
         for (const [tabId, tabInfo] of Object.entries(tabs)) {
           const closeRule = Object.entries(setting.whitelistUrls).find(([url]) => tabInfo.url.startsWith(url))?.[1]
             ?? setting.globalRule;
-          const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
+          const isOutdatedTab = closeRule.idleTimeout > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleTimeout;
           try {
             const tab = await browser.tabs.get(Number(tabId));
             if (isOutdatedTab && await isClosableTab(tab, setting)) {
@@ -172,11 +196,16 @@ export default defineBackground(() => {
             return;
           }
         }
+        const token = await accessTokenStorage.getValue();
+        if (token) {
+          await saveSetting(setting, token);
+        }
       })
     async function initTab() {
       const tabs = await browser.tabs.query({});
       const setting = await getSetting();
-      const clientTabArray = tabs.map((tab) => convertToClientTabInfo(tab));
+      const clientTabArray = tabs.map((tab) => convertToClientTabInfo(tab))
+        .filter((tab) => !tab.url.includes(import.meta.env.VITE_OAUTH_BASE_URL));
       await currentTabStorage.setValue(Object.fromEntries(clientTabArray.map((tab) => [tab.id, tab])));
       if (setting.globalRule.idleCondition === "window") {
         browser.tabs.onActivated.addListener(onActivated);
@@ -229,7 +258,7 @@ export default defineBackground(() => {
         type: "idle",
         tabId: Number(tab.id),
         interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
-        enabled: setting.globalRule.idleThreshold > 0,
+        enabled: setting.globalRule.idleTimeout > 0,
       }, `content-script@${tab.id ?? 0}`);
       return true;
     } else if (setting.globalRule.idleCondition === "visibility") {
@@ -237,7 +266,7 @@ export default defineBackground(() => {
         type: "visibility",
         tabId: Number(tab.id),
         interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
-        enabled: setting.globalRule.idleThreshold > 0,
+        enabled: setting.globalRule.idleTimeout > 0,
       }, `content-script@${tab.id ?? 0}`);
       return true;
     }
@@ -259,9 +288,11 @@ export default defineBackground(() => {
     try {
       const tabs = await Promise.all(tabIds.map((tabId) => browser.tabs.get(tabId)));
       const tabInfos = await Promise.all(tabs.map((tab) => convertTabInfoServer(tab, convertToClientTabInfo(tab))));
+      console.log("Archiving tab group", tabInfos);
       await archiveTabGroup(tabInfos);
       return true;
     } catch (error) {
+      console.error("Failed to archive tab group", error);
       return false;
     }
   });
@@ -269,10 +300,16 @@ export default defineBackground(() => {
 });
 
 async function onActivated(info: chrome.tabs.TabActiveInfo) {
-  const tab = await browser.tabs.get(info.tabId);
+  let tab: chrome.tabs.Tab | undefined;
+  try {
+    tab = await browser.tabs.get(info.tabId);
+  } catch (error) {
+    console.log("Failed to get tab", error);
+    return;
+  }
   const settings = await getSetting();
   const closeRule = getURLSetting(settings, tab.url || "");
-  if (closeRule.idleThreshold === 0 ||
+  if (closeRule.idleTimeout === 0 ||
     closeRule.idleCondition !== "window") {
     return;
   }
@@ -280,4 +317,32 @@ async function onActivated(info: chrome.tabs.TabActiveInfo) {
   const clientTabs = await currentTabStorage.getValue();
   clientTabs[String(info.tabId)] = clientTab;
   await currentTabStorage.setValue(clientTabs);
+}
+async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTabInfo): Promise<TabInfo> {
+  const tabInfo = await sendMessage("get-tab-info", undefined, `content-script@${tab.id ?? 0}`);
+  const url = tab.url ?? getDefaultNewTabUrl();
+  const urlInstance = new URL(url);
+  console.log(tabInfo);
+  const cookies = await browser.cookies.getAll({
+    domain: urlInstance.hostname,
+  });
+  console.log("Cookies for tab", cookies);
+
+  return {
+    id: tab.id!.toString(),
+    title: tab.title ?? urlInstance.hostname,
+    windowId: tab.windowId.toString(),
+    tabIndex: tab.index,
+    url,
+    groupId: tab.groupId.toString(),
+    faviconUrl: tab.favIconUrl,
+    lastActiveAt: clientInfo.lastActiveAt,
+    device: navigator.userAgent,
+    isIncognito: tab.incognito,
+    scrollPosition: tabInfo?.scrollPosition,
+    storage: {
+      ...tabInfo?.storage,
+      cookies: cookies ? JSON.stringify(cookies) : undefined,
+    },
+  } satisfies TabInfo;
 }

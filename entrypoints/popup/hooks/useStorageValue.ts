@@ -1,15 +1,17 @@
 import type { ClientTabInfo } from "@/utils/Tab";
-import type { Setting } from "@/utils/Setting";
+import type { Setting } from "@/types/data";
 
 import React from "react";
 import { browser } from 'wxt/browser';
 import { saveTabIndexedDB } from "@/utils/Tab";
-import { DEFAULT_SETTING, saveSetting as _saveSetting } from "@/utils/Setting";
+import { saveSetting as _saveSetting } from "@/utils/Setting";
 import {
   accessTokenStorage,
   currentTabStorage,
+  refreshTokenStorage,
   settingStorage,
 } from "@/utils/storage";
+import { DEFAULT_SETTING } from "@/utils/constants";
 
 export const useTabs = () => {
   const [isLoading, setIsLoading] = React.useState(false);
@@ -116,6 +118,7 @@ export const useToken = () => {
   }, []);
   const resetToken = async () => {
     await accessTokenStorage.setValue(null);
+    await refreshTokenStorage.setValue(null);
     setToken(null);
   };
   return [token, resetToken] as const;

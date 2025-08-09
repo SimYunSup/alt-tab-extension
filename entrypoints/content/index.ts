@@ -3,23 +3,48 @@ import { getURLSetting } from "@/utils/Setting";
 import { settingStorage } from "@/utils/storage";
 import { allowWindowMessaging, onMessage, sendMessage } from "webext-bridge/content-script";
 
+function isStorageAvailable(type: 'localStorage' | 'sessionStorage'): boolean {
+  let storage;
+  try {
+    storage = window[type];
+    const x = '__storage_test__';
+    storage.setItem(x, x);
+    storage.removeItem(x);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 export default defineContentScript({
-  matches: ["<all_urls>"],
-  runAt: "document_end",
-  registration: "manifest",
+  matches: ["http://*/*", "https://*/*"],
+  // registration: "manifest",
   async main() {
     allowWindowMessaging("background");
-    onMessage("get-tab-info", async () => {
+    onMessage("get-tab-info", () => {
+      let storage: { session: string; local: string } = { session: "{}", local: "{}" };
+      try {
+        if (isStorageAvailable('sessionStorage')) {
+          storage.session = JSON.stringify(Object.entries(sessionStorage));
+        }
+        if (isStorageAvailable('localStorage')) {
+          storage.local = JSON.stringify(Object.entries(localStorage));
+        }
+      } catch (e) {
+        console.error("Error serializing storage", e);
+      }
+
       const tabInfo = {
         storage: {
-          session: Object.keys(sessionStorage).map((key) => `${key}=${sessionStorage[key]}`).join("&"),
-          local: Object.keys(localStorage).map((key) => `${key}=${localStorage[key]}`).join("&"),
+          session: storage.session ?? "{}",
+          local: storage.local ?? "{}",
         },
         scrollPosition: {
           x: window.scrollX,
           y: window.scrollY,
         },
-      }
+      };
+      console.log(tabInfo);
       return tabInfo;
     });
     let idleDetector: IdleDetector | null = null;

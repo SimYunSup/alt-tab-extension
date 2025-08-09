@@ -1,8 +1,8 @@
-import { DEFAULT_SETTING, type Setting } from "./Setting";
 import type { ClientTabInfo } from "./Tab";
-import type { CloseRules } from "@/types/data";
 
 import { storage } from "#imports";
+import { CloseRules, Setting } from "@/types/data";
+import { DEFAULT_SETTING } from "./constants";
 
 export const currentTabStorage = storage.defineItem<Record<string, ClientTabInfo>>(
   "session:tabs",

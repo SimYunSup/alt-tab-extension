@@ -4,7 +4,7 @@ import GoogleLogoIcon from "../../../assets/google.svg?react";
 import { Button } from "../ui/button";
 
 export function Login() {
-  const [hasToken, resetToken] = useToken();
+  const [token, resetToken] = useToken();
   const onClickLoginButton = () => {
     browser.identity.launchWebAuthFlow({
       url: `${import.meta.env.VITE_OAUTH_BASE_URL}/oauth/google`,
@@ -12,8 +12,8 @@ export function Login() {
     }, response => console.log(response));
   }
   return (
-    <div>
-      {hasToken ? (
+    <div className="flex items-center justify-center h-full">
+      {!token ? (
         <Button
           variant="secondary"
           onClick={onClickLoginButton}
@@ -23,11 +23,9 @@ export function Login() {
           구글 로그인
         </Button>
       ) : (
-        <div className="flex items-center justify-center h-full">
           <Button className="text-sm" onClick={resetToken}>
             로그아웃
           </Button>
-        </div>
       )}
     </div>
   )

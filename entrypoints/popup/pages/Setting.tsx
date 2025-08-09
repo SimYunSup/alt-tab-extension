@@ -1,5 +1,4 @@
-import type { InactiveType, CloseRules } from "@/types/data"
-import type { Setting as SettingType } from "@/utils/Setting"
+import type { Setting as SettingType, InactiveType, CloseRules } from "@/types/data"
 import React from "react"
 import { Button } from "@/entrypoints/components/ui/button"
 import {
@@ -53,7 +52,7 @@ import {
 } from "@/entrypoints/components/ui/tooltip"
 import { useToken } from "@/entrypoints/popup/hooks/useStorageValue";
 import { useSetting } from "../hooks/useStorageValue"
-import { DEFAULT_SETTING } from "@/utils/Setting"
+import { DEFAULT_SETTING } from "@/utils/constants"
 import { Login } from "@/entrypoints/components/Login"
 
 const INACTIVE_TYPE_INFO = {
@@ -93,11 +92,11 @@ export function Setting() {
     url: "",
     rule: {
       idleCondition: "window" as InactiveType,
-      idleThreshold: 60,
-      unloadTabIgnore: false,
-      playingTabIgnore: false,
-      pinnedTabIgnore: false,
-      containerTabIgnore: false,
+      idleTimeout: 60,
+      ignoreUnloadedTab: false,
+      ignoreAudibleTab: false,
+      allowPinnedTab: false,
+      ignoreContainerTab: false,
     },
   });
 
@@ -130,11 +129,11 @@ export function Setting() {
       url: "",
       rule: {
         idleCondition: "window",
-        idleThreshold: 60,
-        unloadTabIgnore: false,
-        playingTabIgnore: false,
-        pinnedTabIgnore: false,
-        containerTabIgnore: false,
+        idleTimeout: 60,
+        ignoreUnloadedTab: false,
+        ignoreAudibleTab: false,
+        allowPinnedTab: false,
+        ignoreContainerTab: false,
       },
     })
   }
@@ -181,7 +180,7 @@ export function Setting() {
     }
   }
 
-  const handleIdleThresholdInputChange = (
+  const handleIdleTimeoutInputChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     isBlocklistItem = false,
   ) => {
@@ -189,9 +188,9 @@ export function Setting() {
     if (isNaN(value)) return
 
     if (isBlocklistItem) {
-      handleNewBlocklistItemChange("rule.idleThreshold", value);
+      handleNewBlocklistItemChange("rule.idleTimeout", value);
     } else {
-      handleCloseRulesChange("idleThreshold", value);
+      handleCloseRulesChange("idleTimeout", value);
     }
   }
 
@@ -236,25 +235,25 @@ export function Setting() {
 
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <Label htmlFor="idleThreshold">비활성 시간</Label>
-                  <span className="text-sm text-muted-foreground">{formatTime(_settings.globalRule.idleThreshold)}</span>
+                  <Label htmlFor="idleTimeout">비활성 시간</Label>
+                  <span className="text-sm text-muted-foreground">{formatTime(_settings.globalRule.idleTimeout)}</span>
                 </div>
                 <div className="flex gap-4 items-center">
                   <Slider
-                    id="idleThreshold"
+                    id="idleTimeout"
                     min={1}
                     max={240}
                     step={1}
-                    value={[_settings.globalRule.idleThreshold]}
-                    onValueChange={(value) => handleCloseRulesChange("idleThreshold", value[0])}
+                    value={[_settings.globalRule.idleTimeout]}
+                    onValueChange={(value) => handleCloseRulesChange("idleTimeout", value[0])}
                     className="flex-1"
                   />
                   <Input
                     type="number"
                     min={1}
                     max={240}
-                    value={_settings.globalRule.idleThreshold}
-                    onChange={(e) => handleIdleThresholdInputChange(e)}
+                    value={_settings.globalRule.idleTimeout}
+                    onChange={(e) => handleIdleTimeoutInputChange(e)}
                     className="w-20"
                   />
                 </div>
@@ -273,8 +272,8 @@ export function Setting() {
                   </div>
                   <Switch
                     id="unload-tab-ignore"
-                    checked={_settings.globalRule.unloadTabIgnore}
-                    onCheckedChange={(checked) => handleCloseRulesChange("unloadTabIgnore", checked)}
+                    checked={_settings.globalRule.ignoreUnloadedTab}
+                    onCheckedChange={(checked) => handleCloseRulesChange("ignoreUnloadedTab", checked)}
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -284,8 +283,8 @@ export function Setting() {
                   </div>
                   <Switch
                     id="playing-tab-ignore"
-                    checked={_settings.globalRule.playingTabIgnore}
-                    onCheckedChange={(checked) => handleCloseRulesChange("playingTabIgnore", checked)}
+                    checked={_settings.globalRule.ignoreAudibleTab}
+                    onCheckedChange={(checked) => handleCloseRulesChange("ignoreAudibleTab", checked)}
                   />
                 </div>
 
@@ -296,8 +295,8 @@ export function Setting() {
                   </div>
                   <Switch
                     id="pinned-tab-ignore"
-                    checked={_settings.globalRule.pinnedTabIgnore}
-                    onCheckedChange={(checked) => handleCloseRulesChange("pinnedTabIgnore", checked)}
+                    checked={_settings.globalRule.allowPinnedTab}
+                    onCheckedChange={(checked) => handleCloseRulesChange("allowPinnedTab", checked)}
                   />
                 </div>
 
@@ -308,8 +307,8 @@ export function Setting() {
                   </div>
                   <Switch
                     id="container-tab-ignore"
-                    checked={_settings.globalRule.containerTabIgnore}
-                    onCheckedChange={(checked) => handleCloseRulesChange("containerTabIgnore", checked)}
+                    checked={_settings.globalRule.ignoreContainerTab}
+                    onCheckedChange={(checked) => handleCloseRulesChange("ignoreContainerTab", checked)}
                   />
                 </div>
               </div>
@@ -382,7 +381,7 @@ export function Setting() {
                         min={1}
                         max={240}
                         step={1}
-                        value={[newBlocklistItem.rule.idleThreshold]}
+                        value={[newBlocklistItem.rule.idleTimeout]}
                         onValueChange={(value) => handleNewBlocklistItemChange("rule.idleThreshold", value[0])}
                         className="flex-1"
                       />
@@ -390,8 +389,8 @@ export function Setting() {
                         type="number"
                         min={1}
                         max={240}
-                        value={newBlocklistItem.rule.idleThreshold}
-                        onChange={(e) => handleIdleThresholdInputChange(e, true)}
+                        value={newBlocklistItem.rule.idleTimeout}
+                        onChange={(e) => handleIdleTimeoutInputChange(e, true)}
                         className="w-20"
                       />
                     </div>
@@ -402,7 +401,7 @@ export function Setting() {
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="blocklist-unload-tab-ignore"
-                          checked={newBlocklistItem.rule.unloadTabIgnore}
+                          checked={newBlocklistItem.rule.ignoreUnloadedTab}
                           onCheckedChange={(checked) => handleNewBlocklistItemChange("rule.unloadTabIgnore", checked)}
                         />
                         <Label htmlFor="blocklist-unload-tab-ignore">로드되지 않은 탭 무시</Label>
@@ -410,7 +409,7 @@ export function Setting() {
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="blocklist-playing-tab-ignore"
-                          checked={newBlocklistItem.rule.playingTabIgnore}
+                          checked={newBlocklistItem.rule.ignoreAudibleTab}
                           onCheckedChange={(checked) => handleNewBlocklistItemChange("rule.playingTabIgnore", checked)}
                         />
                         <Label htmlFor="blocklist-playing-tab-ignore">재생중인 탭 종료</Label>
@@ -418,7 +417,7 @@ export function Setting() {
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="blocklist-pinned-tab-ignore"
-                          checked={newBlocklistItem.rule.pinnedTabIgnore}
+                          checked={newBlocklistItem.rule.allowPinnedTab}
                           onCheckedChange={(checked) => handleNewBlocklistItemChange("rule.pinnedTabIgnore", checked)}
                         />
                         <Label htmlFor="blocklist-pinned-tab-ignore">고정된 탭 무시</Label>
@@ -426,7 +425,7 @@ export function Setting() {
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="blocklist-pinned-tab-ignore"
-                          checked={newBlocklistItem.rule.containerTabIgnore}
+                          checked={newBlocklistItem.rule.ignoreContainerTab}
                           onCheckedChange={(checked) => handleNewBlocklistItemChange("rule.containerTabIgnore", checked)}
                         />
                         <Label htmlFor="blocklist-pinned-tab-ignore">컨테이너 탭 무시</Label>
@@ -480,7 +479,7 @@ export function Setting() {
                                     </TooltipContent>
                                   </Tooltip>
 
-                                  {rule.unloadTabIgnore && (
+                                  {rule.ignoreUnloadedTab && (
                                     <Tooltip>
                                       <TooltipTrigger className="mr-1">
                                         <LoaderCircleIcon size={16} />
@@ -490,7 +489,7 @@ export function Setting() {
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
-                                  {rule.playingTabIgnore && (
+                                  {rule.ignoreAudibleTab && (
 
                                     <Tooltip>
                                       <TooltipTrigger className="mr-1">
@@ -501,7 +500,7 @@ export function Setting() {
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
-                                  {rule.pinnedTabIgnore && (
+                                  {rule.allowPinnedTab && (
                                     <Tooltip>
                                       <TooltipTrigger className="mr-1">
                                         <PinOffIcon size={16} />
@@ -511,7 +510,7 @@ export function Setting() {
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
-                                  {rule.containerTabIgnore && (
+                                  {rule.ignoreContainerTab && (
                                     <Tooltip>
                                       <TooltipTrigger className="mr-1">
                                         <ContainerIcon size={16} />
@@ -524,8 +523,8 @@ export function Setting() {
                                 </TableCell>
                                 <TableCell className="text-xs">
                                   <div className="flex justify-center items-center gap-2">
-                                    <span>{rule.idleThreshold ?
-                                      formatTime(rule.idleThreshold) :
+                                    <span>{rule.idleTimeout ?
+                                      formatTime(rule.idleTimeout) :
                                       "잠금"}</span>
                                   </div>
                                 </TableCell>

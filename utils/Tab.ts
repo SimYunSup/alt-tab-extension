@@ -1,14 +1,13 @@
 import type { Browser } from "wxt/browser";
-import type { Setting } from "./Setting";
+import type { Setting } from "@/types/data";
 
 import { browser } from "wxt/browser";
-import { sendMessage } from "webext-bridge/background";
 import { db } from "./db";
 
 export const TAB_KEY = "tab";
 export const RECORD_TAB_KEY = "tab-record";
 
-function getDefaultNewTabUrl() {
+export function getDefaultNewTabUrl() {
   return import.meta.env.BROWSER === "browser" ? "browser://newtab" : "about:newtab";
 }
 
@@ -21,16 +20,16 @@ export async function isClosableTab(tab: Browser.tabs.Tab, setting: Setting) {
       ...blockRule,
     };
   }
-  if (closeRules.unloadTabIgnore && tab.status === "unloaded") {
+  if (closeRules.ignoreUnloadedTab && tab.status === "unloaded") {
     return false;
   }
-  if (closeRules.pinnedTabIgnore && tab.pinned) {
+  if (closeRules.allowPinnedTab && tab.pinned) {
     return false;
   }
-  if (!closeRules.playingTabIgnore && tab.audible) {
+  if (!closeRules.ignoreAudibleTab && tab.audible) {
     return false;
   }
-  if (closeRules.containerTabIgnore) {
+  if (closeRules.ignoreContainerTab) {
     if (tab.groupId) {
       return false;
     }
@@ -47,33 +46,6 @@ export async function isClosableTab(tab: Browser.tabs.Tab, setting: Setting) {
   }
   return true;
 }
-
-// use this function only in background
-export async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTabInfo): Promise<TabInfo> {
-  const tabInfo = await sendMessage("get-tab-info", undefined, `content-script@${tab.id ?? 0}`);
-  const url = tab.url ?? getDefaultNewTabUrl();
-  const urlInstance = new URL(url);
-  const cookies = await browser.cookies.getAll({
-    url: url,
-  });
-  return {
-    id: tab.id!.toString(),
-    title: tab.title ?? urlInstance.hostname,
-    windowId: tab.windowId.toString(),
-    tabIndex: tab.index,
-    url,
-    groupId: tab.groupId.toString(),
-    faviconUrl: tab.favIconUrl,
-    lastActiveAt: clientInfo.lastActiveAt,
-    device: navigator.userAgent,
-    isIncognito: tab.incognito,
-    scrollPosition: tabInfo?.scrollPosition,
-    storge: {
-      ...tabInfo?.storage,
-      cookies: cookies ? JSON.stringify(cookies) : undefined,
-    },
-  } satisfies TabInfo;
-}
 export function convertToClientTabInfo(tab: Browser.tabs.Tab): ClientTabInfo {
   return {
     id: tab.id?.toString() ?? '',
@@ -82,7 +54,7 @@ export function convertToClientTabInfo(tab: Browser.tabs.Tab): ClientTabInfo {
     tabIndex: tab.index,
     isPinned: tab.pinned,
     isAudible: tab.audible,
-    groupId: tab.groupId?.toString(),
+    groupId: tab.groupId?.toString() ?? '-1', // -1 for no group
     windowId: tab.windowId.toString(),
     faviconUrl: tab.favIconUrl,
     lastActiveAt: Date.now()
@@ -133,7 +105,7 @@ export interface TabInfo extends ClientTabInfo {
   device: string;
   isIncognito: boolean;
   scrollPosition?: ScrollPosition;
-  storge?: StorageInfo;
+  storage?: StorageInfo;
 }
 export interface StorageInfo {
   session?: string;

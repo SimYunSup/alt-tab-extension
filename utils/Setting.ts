@@ -1,56 +1,19 @@
-import type { CloseRules } from "@/types/data";
+import type { Setting } from "@/types/data";
+import defu from "defu";
 import { settingStorage } from "./storage";
+import { DEFAULT_SETTING } from "./constants";
 
 export const SETTING_KEY = "setting";
 
-export interface Setting {
-  globalRule: CloseRules;
-  refreshInterval?: number;
-  whitelistUrls: Record<string, Omit<CloseRules, "ignoringGrouptabs" | "ignoreContainerTabs">>; // 다른 규칙을 가지는 사이트
-}
 
-export const DEFAULT_SETTING: Setting = {
-  globalRule: {
-    idleCondition: "window",
-    idleThreshold: 1,
-    unloadTabIgnore: false,
-    pinnedTabIgnore: false,
-    playingTabIgnore: false,
-    containerTabIgnore: false,
-  },
-  whitelistUrls: {
-    ...import.meta.env.BROWSER === "chrome" ? {
-        "chrome://": {
-          idleCondition: "window",
-          idleThreshold: 0,
-        } satisfies CloseRules,
-        "chrome-extension://": {
-          idleCondition: "window",
-          idleThreshold: 0,
-        } satisfies CloseRules,
-          "about:": {
-            idleCondition: "window",
-            idleThreshold: 0,
-          } satisfies CloseRules,
-      } : {},
-    ...import.meta.env.BROWSER === "firefox" ? {
-      "about:": {
-        idleCondition: "window",
-        idleThreshold: 0,
-      } satisfies CloseRules,
-      "firefox://": {
-        idleCondition: "window",
-        idleThreshold: 0,
-      } satisfies CloseRules,
-    } : {},
-  },
-};
+
+
 
 export async function initSettingIfLogin(token: string | null) {
   if (!token) {
     return;
   }
-  const setting = await fetch(`${import.meta.env.VITE_API_URL}/stash-settings`, {
+  const setting = await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/stash-setting`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -60,14 +23,14 @@ export async function initSettingIfLogin(token: string | null) {
   if (!settingJson) {
     await settingStorage.setValue(DEFAULT_SETTING);
   } else {
-    await settingStorage.setValue({
-      ...DEFAULT_SETTING,
-      ...settingJson,
-    });
+    await settingStorage.setValue(defu(
+      settingJson,
+      DEFAULT_SETTING,
+    ) as Setting);
   }
 }
 export async function saveSetting(setting: Setting, token: string | null) {
-  await fetch(`${import.meta.env.VITE_API_URL}/stash-settings/update`, {
+  await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/stash-setting/update`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

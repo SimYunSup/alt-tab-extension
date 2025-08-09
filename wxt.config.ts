@@ -19,6 +19,7 @@ export default defineConfig({
   imports: false,
   manifest({
     browser,
+    mode,
   }) {
     const manifest = {
       name: "Alt Tab",
@@ -36,6 +37,11 @@ export default defineConfig({
         "<all_urls>",
       ],
     };
+    if (mode === "development") {
+      if (browser === "chrome" || browser === "edge") {
+        (manifest as any).key = import.meta.env.VITE_MANIFEST_DEV_KEY;
+      }
+    }
     if (browser === "firefox") {
       manifest.permissions.push("contextualIdentities");
     }

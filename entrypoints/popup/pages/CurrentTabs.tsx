@@ -1,5 +1,6 @@
 import type { ClientTabInfo } from "@/utils/Tab";
-import { getURLSetting, type Setting } from "@/utils/Setting";
+import type { Setting } from "@/types/data";
+
 
 import React from "react";
 import { browser } from 'wxt/browser';
@@ -9,6 +10,7 @@ import {
   Search,
   XIcon,
 } from "lucide-react";
+import { sendMessage } from "webext-bridge/popup";
 import { Badge } from "@/entrypoints/components/ui/badge";
 import { Input } from "@/entrypoints/components/ui/input";
 import { Button } from "@/entrypoints/components/ui/button";
@@ -16,6 +18,7 @@ import { ScrollArea } from "@/entrypoints/components/ui/scroll-area";
 import { Separator } from "@/entrypoints/components/ui/separator";
 import { cn } from "@/utils";
 import { isClosableTab, saveTabIndexedDB } from "@/utils/Tab";
+import { getURLSetting } from "@/utils/Setting";
 import { useSetting, useTabs, useToken } from "../hooks/useStorageValue";
 
 const formatRemainingTime = (milliseconds: number) => {
@@ -42,7 +45,6 @@ function normalizeTabs(tabs: Record<string, ClientTabInfo>) {
     if (!acc[windowId]) {
       acc[windowId] = [];
     }
-    console.log(tab.tabIndex, tab.url);
     acc[windowId][tab.tabIndex] = tab;
     return acc;
   }, {} as Record<string, ClientTabInfo[]>);
@@ -77,11 +79,11 @@ function TabItem({
     return null;
   }
   const closeRule = getURLSetting(settings, tab.url);
-  const isLocked = closeRule.idleThreshold === 0 ||
-    !closeRule.pinnedTabIgnore && tab.isPinned ||
-    closeRule.unloadTabIgnore && tab.isUnloaded ||
-    !closeRule.playingTabIgnore && tab.isAudible ||
-    closeRule.containerTabIgnore && tab.groupId
+  const isLocked = closeRule.idleTimeout === 0 ||
+    !closeRule.allowPinnedTab && tab.isPinned ||
+    closeRule.ignoreUnloadedTab && tab.isUnloaded ||
+    !closeRule.ignoreAudibleTab && tab.isAudible ||
+    closeRule.ignoreContainerTabs && tab.groupId
     ;
   return (
     <button
@@ -118,10 +120,10 @@ function TabItem({
           <span
             className={cn(
               "text-xs px-1.5 py-0.5 rounded-full font-medium",
-              isLocked ? "text-slate-400 bg-slate-100" : getTimeColor((tab.lastActiveAt + closeRule.idleThreshold * 60 * 1000 - Date.now()) / 1000, 600),
+              isLocked ? "text-slate-400 bg-slate-100" : getTimeColor((tab.lastActiveAt + closeRule.idleTimeout * 60 * 1000 - Date.now()) / 1000, 600),
             )}
           >
-            {isLocked ? "잠금" : formatRemainingTime(tab.lastActiveAt + closeRule.idleThreshold * 60 * 1000 - Date.now())}
+            {isLocked ? "잠금" : formatRemainingTime(tab.lastActiveAt + closeRule.idleTimeout * 60 * 1000 - Date.now())}
           </span>
         ) : null}
       </div>
@@ -158,7 +160,7 @@ export const CurrentTabs = () => {
         }
         for (const [tabId, tabInfo] of Object.entries(tabs)) {
           const closeRule = getURLSetting(settings, tabInfo.url);
-          const isOutdatedTab = closeRule.idleThreshold > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleThreshold;
+          const isOutdatedTab = closeRule.idleTimeout > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleTimeout;
           try {
             const tab = await browser.tabs.get(Number(tabId));
             if (isOutdatedTab && await isClosableTab(tab, settings)) {
@@ -180,6 +182,14 @@ export const CurrentTabs = () => {
     }
   }, [tabs]);
   const tabWindows = normalizeTabs(filteredTabs);
+  const onClickArchiveButton = async () => {
+    console.log(selectedTabs);
+    const result = await sendMessage("send-tab-group", { tabIds: Array.from(selectedTabs, (id) => parseInt(id)) }, "background");
+    if (!result) {
+      return;
+    }
+    setSelectedTabs(new Set());
+  }
   const onClickCloseButton = () => {
     closeTab(Array.from(selectedTabs));
     setSelectedTabs(new Set());
@@ -200,10 +210,10 @@ export const CurrentTabs = () => {
             <Button
               variant="outline"
               size="icon"
-              className="w-8 h-6 mr-2"
+              className="h-6 mr-2"
+              onClick={onClickArchiveButton}
               disabled={selectedTabs.size === 0 || isLoading}
             >
-              <span aria-hidden>탭 그룹</span>
               <ArchiveIcon className="size-4" />
               <span className="sr-only">선택한 탭 그룹으로 저장하기</span>
             </Button>
@@ -211,7 +221,7 @@ export const CurrentTabs = () => {
           <Button
             variant="outline"
             size="icon"
-            className="w-8 h-6 mr-2"
+            className="h-6 mr-2"
             onClick={onClickCloseButton}
             disabled={selectedTabs.size === 0 || isLoading}
           >
