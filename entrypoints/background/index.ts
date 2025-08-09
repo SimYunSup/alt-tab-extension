@@ -325,7 +325,6 @@ async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTab
   const cookies = await browser.cookies.getAll({
     domain: urlInstance.hostname,
   });
-  console.log("Cookies for tab", cookies);
 
   return {
     id: tab.id!.toString(),
