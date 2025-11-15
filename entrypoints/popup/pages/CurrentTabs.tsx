@@ -20,24 +20,13 @@ import { Button } from "@/entrypoints/components/ui/button";
 import { ScrollArea } from "@/entrypoints/components/ui/scroll-area";
 import { Separator } from "@/entrypoints/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/entrypoints/components/ui/dialog";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/entrypoints/components/ui/input-otp";
 import { cn } from "@/utils";
 import { isClosableTab, saveTabIndexedDB } from "@/utils/Tab";
 import { getURLSetting } from "@/utils/Setting";
 import { useSetting, useTabs, useToken } from "../hooks/useStorageValue";
 import { generateSecretAndSaltFromPin } from "@/utils/crypto";
-import ReactDOM from "react-dom";
-
-const formatRemainingTime = (milliseconds: number) => {
-  const seconds = Math.floor(milliseconds / 1000)
-  if (seconds < 60) {
-    return seconds > 0 ? `${seconds}초` : "종료 중"
-  } else {
-    const minutes = Math.floor(seconds / 60)
-    const hours = Math.floor(minutes / 60)
-    const mins = minutes % 60
-    return hours > 0 ? `${hours}시간 ${mins}분` : `${mins}분 ${seconds % 60}초`
-  }
-}
+import { formatRemainingTime } from "@/utils/time";
 
 const getTimeColor = (seconds: number, limit: number) => {
   if (seconds / limit < 0.25) return "text-red-500 bg-red-50"
@@ -142,10 +131,10 @@ export const CurrentTabs = () => {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTabs, setSelectedTabs] = React.useState<Set<string>>(new Set());
   const [isPinDialogOpen, setIsPinDialogOpen] = React.useState(false);
-  const [pinInputs, setPinInputs] = React.useState<string[]>(["", "", "", "", "", ""]);
+  const [pinValue, setPinValue] = React.useState("");
   const [pinError, setPinError] = React.useState<string | null>(null);
-  const [showPinCode, setShowPinCode] = React.useState(false);
   const [isArchiving, setIsArchiving] = React.useState(false);
+  const [archiveSuccess, setArchiveSuccess] = React.useState(false);
   const {
     tabs,
     closeTab,
@@ -194,55 +183,16 @@ export const CurrentTabs = () => {
   }, [tabs]);
   const tabWindows = normalizeTabs(filteredTabs);
 
-  const handlePinInputChange = (index: number, value: string) => {
-    if (value.length > 1) {
-      // If pasting a complete PIN
-      if (value.length === 6) {
-        const newPinInputs = value.split("").slice(0, 6);
-        setPinInputs(newPinInputs);
-        // Focus the last input
-        const lastInput = document.getElementById(`archive-pin-${5}`);
-        if (lastInput) {
-          lastInput.focus();
-        }
-      }
-      return;
-    }
-
-    const newPinInputs = [...pinInputs];
-    newPinInputs[index] = value;
-    setPinInputs(newPinInputs);
-
-    // Auto-focus next input
-    if (value && index < 5) {
-      const nextInput = document.getElementById(`archive-pin-${index + 1}`);
-      if (nextInput) {
-        nextInput.focus();
-      }
-    }
-  };
-
-  const handlePinKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Handle backspace to go to previous input
-    if (e.key === "Backspace" && !pinInputs[index] && index > 0) {
-      const prevInput = document.getElementById(`archive-pin-${index - 1}`);
-      if (prevInput) {
-        prevInput.focus();
-      }
-    }
-  };
-
   const onClickArchiveButton = () => {
     if (selectedTabs.size === 0) return;
-    setPinInputs(["", "", "", "", "", ""]);
+    setPinValue("");
     setPinError(null);
+    setArchiveSuccess(false);
     setIsPinDialogOpen(true);
   };
 
   const confirmArchive = async () => {
-    const pinCode = pinInputs.join("");
-
-    if (pinCode.length !== 6) {
+    if (pinValue.length !== 6) {
       setPinError("6자리 PIN 코드를 입력해주세요.");
       return;
     }
@@ -252,7 +202,7 @@ export const CurrentTabs = () => {
 
     try {
       // Generate secret and salt from PIN
-      const { secret, salt } = await generateSecretAndSaltFromPin(pinCode);
+      const { secret, salt } = await generateSecretAndSaltFromPin(pinValue);
 
       // Send to background script
       const result = await sendMessage(
@@ -266,9 +216,15 @@ export const CurrentTabs = () => {
       );
 
       if (result) {
+        setArchiveSuccess(true);
         setSelectedTabs(new Set());
-        setIsPinDialogOpen(false);
-        setPinInputs(["", "", "", "", "", ""]);
+
+        // Auto close dialog after success
+        setTimeout(() => {
+          setIsPinDialogOpen(false);
+          setArchiveSuccess(false);
+          setPinValue("");
+        }, 1500);
       } else {
         setPinError("탭 그룹 아카이브에 실패했습니다. 다시 시도해주세요.");
       }
@@ -365,73 +321,98 @@ export const CurrentTabs = () => {
       </ScrollArea>
 
       {/* PIN Code Dialog for Archiving */}
-      {ReactDOM.createPortal((
-        <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>탭 그룹 암호화</DialogTitle>
-              <DialogDescription>
-                선택한 탭들을 아카이브하기 위해 6자리 PIN 코드를 설정해주세요.
-                이 PIN 코드는 나중에 탭 그룹을 복원할 때 필요합니다.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col space-y-4 py-4">
-              {pinError && <div className="text-sm font-medium text-red-500 text-center">{pinError}</div>}
+      <Dialog open={isPinDialogOpen} onOpenChange={(open) => {
+        if (!isArchiving) {
+          setIsPinDialogOpen(open);
+          if (!open) {
+            setPinValue("");
+            setPinError(null);
+            setArchiveSuccess(false);
+          }
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>탭 그룹 암호화</DialogTitle>
+            <DialogDescription>
+              {archiveSuccess
+                ? "탭 그룹이 성공적으로 아카이브되었습니다!"
+                : "선택한 탭들을 아카이브하기 위해 6자리 PIN 코드를 설정해주세요. 이 PIN 코드는 나중에 탭 그룹을 복원할 때 필요합니다."
+              }
+            </DialogDescription>
+          </DialogHeader>
 
-              <div className="flex justify-center gap-2">
-                {pinInputs.map((pin, index) => (
-                  <Input
-                    key={index}
-                    id={`archive-pin-${index}`}
-                    type={showPinCode ? "text" : "password"}
-                    value={pin}
-                    onChange={(e) => handlePinInputChange(index, e.target.value)}
-                    onKeyDown={(e) => handlePinKeyDown(index, e)}
-                    className="w-10 h-12 text-center text-lg"
-                    maxLength={1}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    disabled={isArchiving}
-                  />
-                ))}
+          {archiveSuccess ? (
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
+                <Lock className="h-8 w-8 text-green-600" />
               </div>
+              <p className="text-sm text-muted-foreground text-center">
+                {selectedTabs.size}개의 탭이 안전하게 저장되었습니다
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col space-y-6 py-4">
+              {pinError && (
+                <div className="text-sm font-medium text-red-500 text-center bg-red-50 py-2 px-4 rounded-md">
+                  {pinError}
+                </div>
+              )}
 
               <div className="flex justify-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-1"
-                  onClick={() => setShowPinCode(!showPinCode)}
+                <InputOTP
+                  maxLength={6}
+                  value={pinValue}
+                  onChange={setPinValue}
                   disabled={isArchiving}
+                  onComplete={confirmArchive}
                 >
-                  {showPinCode ? (
-                    <>
-                      <EyeOff className="h-3.5 w-3.5" />
-                      <span className="text-xs">PIN 숨기기</span>
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="h-3.5 w-3.5" />
-                      <span className="text-xs">PIN 보기</span>
-                    </>
-                  )}
-                </Button>
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
               </div>
+
+              <p className="text-xs text-center text-muted-foreground">
+                {pinValue.length}/6 자리 입력됨
+              </p>
             </div>
+          )}
+
+          {!archiveSuccess && (
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsPinDialogOpen(false)} disabled={isArchiving}>
+              <Button
+                variant="outline"
+                onClick={() => setIsPinDialogOpen(false)}
+                disabled={isArchiving}
+              >
                 취소
               </Button>
-              <Button onClick={confirmArchive} disabled={pinInputs.some((pin) => !pin) || isArchiving}>
-                <Lock className="h-4 w-4 mr-2" />
-                {isArchiving ? "아카이브 중..." : "아카이브"}
+              <Button
+                onClick={confirmArchive}
+                disabled={pinValue.length !== 6 || isArchiving}
+              >
+                {isArchiving ? (
+                  <>
+                    <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    아카이브 중...
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-4 w-4 mr-2" />
+                    아카이브
+                  </>
+                )}
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      ),
-        document.body
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
