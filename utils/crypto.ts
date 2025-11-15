@@ -114,3 +114,32 @@ export async function hashPinWithArgon(pin: string, salt: Uint8Array) {
     throw new Error("PIN hashing failed.");
   }
 }
+
+/**
+ * Generates secret and salt from PIN code for E2EE
+ * Used for tab group encryption
+ */
+export async function generateSecretAndSaltFromPin(pinCode: string) {
+  const salt = generateRandomBytes(SALT_LENGTH_BYTES);
+  const secret = await hashPinWithArgon(pinCode, salt);
+
+  return {
+    secret: arrayBufferToBase64(secret),
+    salt: arrayBufferToBase64(salt),
+  };
+}
+
+/**
+ * Verifies if a PIN code matches the stored secret and salt
+ */
+export async function verifyPinCode(pinCode: string, storedSecret: string, storedSalt: string) {
+  try {
+    const saltBytes = base64ToArrayBuffer(storedSalt);
+    const computedSecret = await hashPinWithArgon(pinCode, saltBytes);
+    const computedSecretB64 = arrayBufferToBase64(computedSecret);
+    return computedSecretB64 === storedSecret;
+  } catch (error) {
+    console.error("PIN verification failed:", error);
+    return false;
+  }
+}
