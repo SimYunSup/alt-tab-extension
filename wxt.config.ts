@@ -10,13 +10,11 @@ export default defineConfig({
         tailwindcss(),
         svgr(),
       ],
-      resolve: {
-        alias: {
-          '@node-rs/argon2': '@node-rs/argon2/browser',
-        },
-      },
       optimizeDeps: {
         exclude: ['@node-rs/argon2'],
+      },
+      build: {
+        target: 'esnext', // Support top-level await for WASM
       },
     };
   },
