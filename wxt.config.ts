@@ -10,6 +10,14 @@ export default defineConfig({
         tailwindcss(),
         svgr(),
       ],
+      resolve: {
+        alias: {
+          '@node-rs/argon2': '@node-rs/argon2/browser',
+        },
+      },
+      optimizeDeps: {
+        exclude: ['@node-rs/argon2'],
+      },
     };
   },
   modules: [
@@ -49,7 +57,7 @@ export default defineConfig({
   },
   autoIcons: {
     enabled: true,
-    grayscaleOnDevelopment: false,
+    developmentIndicator: false,
     baseIconPath: "./public/icon.png",
   },
 });
