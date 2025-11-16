@@ -16,8 +16,35 @@ const DEFAULT_INTERVAL = 10_000;
 
 export default defineBackground(() => {
   let intervalResult: [string, boolean][] = [];
+
+  // Inject content script into existing tabs on extension load
+  async function injectContentScriptToExistingTabs() {
+    const tabs = await browser.tabs.query({});
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url) continue;
+      // Skip non-injectable URLs
+      if (tab.url.startsWith("chrome://") ||
+          tab.url.startsWith("chrome-extension://") ||
+          tab.url.startsWith("about:") ||
+          tab.url.startsWith("edge://") ||
+          tab.url.startsWith("moz-extension://")) {
+        continue;
+      }
+      try {
+        await browser.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ["content-scripts/content.js"],
+        });
+        console.log("[Background] Injected content script into tab", tab.id, tab.url);
+      } catch (error) {
+        console.warn("[Background] Failed to inject content script into tab", tab.id, error);
+      }
+    }
+  }
+
   async function init() {
     let listClearInterval: () => void = () => { };
+    await injectContentScriptToExistingTabs();
     await initTab();
     settingStorage.watch(async (setting) => {
       if (!setting) {
@@ -82,37 +109,21 @@ export default defineBackground(() => {
         refreshToken,
       }
     }
-    browser.tabs.onCreated.addListener(async (tab) => {
-      if (!tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL)) {
-        return;
-      }
-      const tokens = detectOauthFlow(tab.url);
-      try {
-        await browser.tabs.remove(tab.id!);
-      } catch (error) {
-        console.debug("Failed to remove tab", error);
-      }
-      void refreshTokens(tokens?.accessToken, tokens?.refreshToken);
-    });
-    browser.tabs.onUpdated.addListener(async (_, __, tab) => {
-      if (!tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL) || !tab.active) {
-        return;
-      }
-      detectOauthFlow(tab.url);
-      try {
-        await browser.tabs.remove(tab.id!);
-      } catch (error) {
-        console.debug("Failed to remove tab", error);
-      }
-    });
-
-    // Tab event
+    // Tab event - combined with OAuth detection
     browser.tabs.onCreated.addListener(async (tab) => {
       if (!tab.id) {
         return;
       }
+      // Handle OAuth flow first - don't track OAuth tabs at all
       if (tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL)) {
-        return;
+        const tokens = detectOauthFlow(tab.url);
+        try {
+          await browser.tabs.remove(tab.id);
+        } catch (error) {
+          console.debug("Failed to remove tab", error);
+        }
+        void refreshTokens(tokens?.accessToken, tokens?.refreshToken);
+        return; // Don't process OAuth tabs further
       }
       const setting = await getSetting();
       let tabs = await currentTabStorage.getValue();
@@ -125,6 +136,27 @@ export default defineBackground(() => {
       await currentTabStorage.setValue(tabs);
     });
     browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+      if (!tab.id) {
+        return;
+      }
+      // Handle OAuth flow first - remove from storage if it exists
+      if (tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL)) {
+        // Remove OAuth tab from storage if it was added
+        let tabs = await currentTabStorage.getValue();
+        if (tabs && tabs[tabId]) {
+          delete tabs[tabId];
+          await currentTabStorage.setValue(tabs);
+        }
+        if (tab.active) {
+          detectOauthFlow(tab.url);
+          try {
+            await browser.tabs.remove(tab.id);
+          } catch (error) {
+            console.debug("Failed to remove tab", error);
+          }
+        }
+        return; // Don't process OAuth tabs further
+      }
       let tabs = await currentTabStorage.getValue();
       tabs = tabs ?? {};
       const currentTabInfo = convertToClientTabInfo(tab);
@@ -286,15 +318,20 @@ export default defineBackground(() => {
   onMessage("send-tab-group", async (message) => {
     const { tabIds, secret, salt } = message.data as { tabIds: number[], secret: string, salt: string };
     try {
+      console.log("[Background] Received send-tab-group message for tabs:", tabIds);
       if (!secret || !salt) {
         console.error("Secret and salt are required for tab group archiving");
         return false;
       }
 
+      console.log("[Background] Step 1: Getting tab info...");
       const tabs = await Promise.all(tabIds.map((tabId) => browser.tabs.get(tabId)));
+      console.log("[Background] Step 2: Converting to server format...");
       const tabInfos = await Promise.all(tabs.map((tab) => convertTabInfoServer(tab, convertToClientTabInfo(tab))));
+      console.log("[Background] Step 3: Archiving tab group...");
 
       const result = await archiveTabGroup(tabInfos, secret, salt);
+      console.log("[Background] Step 4: Archive result:", result);
 
       if (result) {
         console.log("Tab group archived successfully with ID:", result.id);
@@ -303,7 +340,7 @@ export default defineBackground(() => {
 
       return false;
     } catch (error) {
-      console.error("Failed to archive tab group", error);
+      console.error("[Background] Failed to archive tab group:", error);
       return false;
     }
   });
@@ -330,12 +367,31 @@ async function onActivated(info: Browser.tabs.OnActivatedInfo) {
   await currentTabStorage.setValue(clientTabs);
 }
 async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTabInfo): Promise<TabInfo> {
-  const tabInfo = await sendMessage("get-tab-info", undefined, `content-script@${tab.id ?? 0}`);
+  console.log("[Background] convertTabInfoServer: Getting info for tab", tab.id, tab.url);
+  let tabInfo;
+  try {
+    console.log("[Background] convertTabInfoServer: Sending get-tab-info message...");
+    // Add timeout to prevent infinite waiting for content script response
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Content script timeout")), 3000)
+    );
+    tabInfo = await Promise.race([
+      sendMessage("get-tab-info", undefined, `content-script@${tab.id ?? 0}`),
+      timeoutPromise
+    ]);
+    console.log("[Background] convertTabInfoServer: Received tab info:", tabInfo);
+  } catch (error) {
+    console.warn("[Background] convertTabInfoServer: Failed to get tab info from content script:", error);
+    tabInfo = null;
+  }
+
   const url = tab.url ?? getDefaultNewTabUrl();
   const urlInstance = new URL(url);
+  console.log("[Background] convertTabInfoServer: Getting cookies for", urlInstance.hostname);
   const cookies = await browser.cookies.getAll({
     domain: urlInstance.hostname,
   });
+  console.log("[Background] convertTabInfoServer: Got", cookies.length, "cookies");
 
   return {
     id: tab.id!.toString(),

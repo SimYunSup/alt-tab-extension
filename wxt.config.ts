@@ -10,11 +10,8 @@ export default defineConfig({
         tailwindcss(),
         svgr(),
       ],
-      optimizeDeps: {
-        exclude: ['@node-rs/argon2'],
-      },
       build: {
-        target: 'esnext', // Support top-level await for WASM
+        target: 'esnext',
       },
     };
   },
@@ -37,11 +34,15 @@ export default defineConfig({
         "activeTab",
         "cookies",
         "nativeMessaging",
-        "identity"
+        "identity",
+        "scripting"
       ],
       host_permissions: [
         "<all_urls>",
       ],
+      content_security_policy: {
+        extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+      },
     };
     if (mode === "development") {
       if (browser === "chrome" || browser === "edge") {

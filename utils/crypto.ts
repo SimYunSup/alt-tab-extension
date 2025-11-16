@@ -1,14 +1,9 @@
-import type { hashRaw as nodeHashRaw } from "@node-rs/argon2";
-// @ts-expect-error becuase @node-rs/argon2/browser.d.ts does not export
-import { hashRaw } from "@node-rs/argon2/browser";
-
-const browserHashRaw = hashRaw as typeof nodeHashRaw;
+import { argon2id } from "hash-wasm";
 
 const SALT_LENGTH_BYTES = 16;         // Recommended salt length for Argon2
 const IV_LENGTH_BYTES = 12;           // Recommended length for AES-GCM IV
 const ARGON2_HASH_LENGTH_BYTES = 32;  // Output length matching diagram (key size for AES-256)
 
-const ARGON2_TYPE = 2;
 
 
 // --- Helper Functions ---
@@ -100,15 +95,19 @@ export async function hashPinWithArgon(pin: string, salt: Uint8Array): Promise<U
   }
 
   try {
-    const hashResult = await browserHashRaw(
-      pin,
-      {
-        salt: Buffer.from(salt),
-        outputLen: ARGON2_HASH_LENGTH_BYTES,
-        algorithm: ARGON2_TYPE,
-      }
-    );
-    return new Uint8Array(hashResult);
+    console.log("[Crypto] Starting Argon2id hashing...");
+    const hashResult = await argon2id({
+      password: pin,
+      salt: salt,
+      parallelism: 1,
+      iterations: 3,
+      memorySize: 65536, // 64 MiB
+      hashLength: ARGON2_HASH_LENGTH_BYTES,
+      outputType: "binary",
+    });
+    console.log("[Crypto] Argon2id hashing complete");
+
+    return hashResult;
   } catch (error) {
     console.error("Argon2 hashing failed:", error);
     throw new Error("PIN hashing failed.");
