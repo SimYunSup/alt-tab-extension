@@ -10,6 +10,12 @@ export default defineConfig({
         tailwindcss(),
         svgr(),
       ],
+      optimizeDeps: {
+        exclude: ['@node-rs/argon2'],
+      },
+      build: {
+        target: 'esnext', // Support top-level await for WASM
+      },
     };
   },
   modules: [
@@ -49,7 +55,7 @@ export default defineConfig({
   },
   autoIcons: {
     enabled: true,
-    grayscaleOnDevelopment: false,
+    developmentIndicator: false,
     baseIconPath: "./public/icon.png",
   },
 });

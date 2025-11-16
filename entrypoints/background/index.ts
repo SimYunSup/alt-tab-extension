@@ -284,13 +284,24 @@ export default defineBackground(() => {
     await currentTabStorage.setValue(clientTabs);
   });
   onMessage("send-tab-group", async (message) => {
-    const { tabIds } = message.data;
+    const { tabIds, secret, salt } = message.data as { tabIds: number[], secret: string, salt: string };
     try {
+      if (!secret || !salt) {
+        console.error("Secret and salt are required for tab group archiving");
+        return false;
+      }
+
       const tabs = await Promise.all(tabIds.map((tabId) => browser.tabs.get(tabId)));
       const tabInfos = await Promise.all(tabs.map((tab) => convertTabInfoServer(tab, convertToClientTabInfo(tab))));
-      console.log("Archiving tab group", tabInfos);
-      await archiveTabGroup(tabInfos);
-      return true;
+
+      const result = await archiveTabGroup(tabInfos, secret, salt);
+
+      if (result) {
+        console.log("Tab group archived successfully with ID:", result.id);
+        return true;
+      }
+
+      return false;
     } catch (error) {
       console.error("Failed to archive tab group", error);
       return false;
@@ -299,8 +310,8 @@ export default defineBackground(() => {
   init();
 });
 
-async function onActivated(info: chrome.tabs.TabActiveInfo) {
-  let tab: chrome.tabs.Tab | undefined;
+async function onActivated(info: Browser.tabs.OnActivatedInfo) {
+  let tab: Browser.tabs.Tab | undefined;
   try {
     tab = await browser.tabs.get(info.tabId);
   } catch (error) {

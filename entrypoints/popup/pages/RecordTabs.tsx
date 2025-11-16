@@ -10,6 +10,7 @@ import { ScrollArea } from "@/entrypoints/components/ui/scroll-area";
 import { Separator } from "@/entrypoints/components/ui/separator";
 import { db } from "@/utils/db";
 import { cn } from "@/utils";
+import { formatTimeAgo } from "@/utils/time";
 
 function useRecordTabs(now: number) {
   const tabs = useLiveQuery(
@@ -135,7 +136,7 @@ export function RecordTabs() {
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
                       <div className="flex items-center gap-1">
                         <Clock className="h-3 w-3 text-slate-400" />
-                        <span className="text-xs text-slate-500">{formatTimeAgo(tab.lastActiveAt, now)}</span>
+                        <span className="text-xs text-slate-500">{formatTimeAgo(tab.lastActiveAt)}</span>
                       </div>
                     </div>
                   </div>
@@ -145,37 +146,15 @@ export function RecordTabs() {
             })
           ) : (
             <div className="flex flex-col items-center justify-center h-40 text-center p-4">
-              <p className="text-muted-foreground mb-2">닫힌 탭이 없습니다.</p>
-              <p className="text-sm text-muted-foreground">탭이 닫히면 여기에 표시됩니다.</p>
+              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                <Clock className="h-8 w-8 text-slate-400" />
+              </div>
+              <p className="text-md font-medium text-slate-900 mb-1">닫힌 탭이 없습니다</p>
+              <p className="text-sm text-slate-500">탭이 닫히면 여기에 표시됩니다.</p>
             </div>
           )}
         </div>
       </ScrollArea>
     </div>
   )
-}
-const formatter = new Intl.RelativeTimeFormat(undefined, {
-  numeric: 'auto'
-})
-
-const DIVISIONS = [
-  { amount: 60, name: 'seconds' },
-  { amount: 60, name: 'minutes' },
-  { amount: 24, name: 'hours' },
-  { amount: 7, name: 'days' },
-  { amount: 4.34524, name: 'weeks' },
-  { amount: 12, name: 'months' },
-  { amount: Number.POSITIVE_INFINITY, name: 'years' }
-] as const;
-
-function formatTimeAgo(date: number, now: number) {
-  let duration = (date - now) / 1000
-
-  for (let i = 0; i <= DIVISIONS.length; i++) {
-    const division = DIVISIONS[i]
-    if (Math.abs(duration) < division.amount) {
-      return formatter.format(Math.round(duration), division.name)
-    }
-    duration /= division.amount
-  }
 }

@@ -38,8 +38,12 @@ describe('isClosableTab', () => {
     incognito: false,
     url: 'https://example.com',
     title: 'Example',
+    frozen: false,
+    selected: false,
+    discarded: false,
+    autoDiscardable: true,
     ...overrides,
-  });
+  } as Browser.tabs.Tab);
 
   beforeEach(() => {
     vi.clearAllMocks();
