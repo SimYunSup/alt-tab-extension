@@ -187,6 +187,7 @@ export const CurrentTabs = () => {
   const [isArchiving, setIsArchiving] = React.useState(false);
   const [archiveSuccess, setArchiveSuccess] = React.useState(false);
   const [tabsToArchive, setTabsToArchive] = React.useState<number[]>([]);
+  const archivedCountRef = React.useRef(0);
   const {
     tabs,
     closeTab,
@@ -277,15 +278,18 @@ export const CurrentTabs = () => {
       console.log("[Archive] Step 3: Background response received:", result);
 
       if (result) {
+        console.log("[Archive] Success! Archived tabs count:", tabsToArchive.length);
+        archivedCountRef.current = tabsToArchive.length;
         setArchiveSuccess(true);
         setSelectedTabs(new Set());
-        setTabsToArchive([]);
 
         // Auto close dialog after success
         setTimeout(() => {
           setIsPinDialogOpen(false);
           setArchiveSuccess(false);
           setPinValue("");
+          setTabsToArchive([]);
+          archivedCountRef.current = 0;
         }, 1500);
       } else {
         setPinError("탭 그룹 아카이브에 실패했습니다. 다시 시도해주세요.");
@@ -431,7 +435,7 @@ export const CurrentTabs = () => {
                 <Lock className="h-8 w-8 text-green-600" />
               </div>
               <p className="text-sm text-muted-foreground text-center">
-                {selectedTabs.size}개의 탭이 안전하게 저장되었습니다
+                {archivedCountRef.current}개의 탭이 안전하게 저장되었습니다
               </p>
             </div>
           ) : (
@@ -446,9 +450,11 @@ export const CurrentTabs = () => {
                 <InputOTP
                   maxLength={6}
                   value={pinValue}
-                  onChange={setPinValue}
+                  onChange={(value) => setPinValue(value.replace(/[^0-9]/g, ""))}
                   disabled={isArchiving}
                   onComplete={confirmArchive}
+                  pattern="[0-9]*"
+                  inputMode="numeric"
                 >
                   <InputOTPGroup>
                     <InputOTPSlot index={0} />

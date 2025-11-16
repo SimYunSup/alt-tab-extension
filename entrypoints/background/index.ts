@@ -10,7 +10,14 @@ import { isClosableTab } from "@/utils/Tab";
 import { getSetting, getURLSetting, initSettingIfLogin, saveSetting } from "@/utils/Setting";
 import { currentTabStorage, settingStorage, accessTokenStorage, refreshTokenStorage } from "@/utils/storage";
 import { archiveTabGroup } from "@/utils/ArchivedTabGroup";
+// Setup mock API in development mode (sync import)
+import { setupMockAPI } from '@/mocks/setup';
 
+// Enable mock API in development or when VITE_USE_MOCK_API is set
+if (import.meta.env.DEV || import.meta.env.VITE_USE_MOCK_API === 'true') {
+  console.log('[Background] Setting up Mock API...');
+  setupMockAPI();
+}
 
 const DEFAULT_INTERVAL = 10_000;
 

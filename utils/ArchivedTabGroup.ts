@@ -1,48 +1,48 @@
 import { accessTokenStorage } from "./storage";
-import type { TabInfo, ScrollPosition, StorageInfo } from "./Tab";
+import type { TabInfo } from "./Tab";
 
 /**
  * Server-compatible tab info structure
  * Maps to backend's BrowserTabInfoDto
  */
-export interface ServerTabInfo {
-  id: string;
+export interface BrowserTabInfoDto {
+  windowId: string;
+  groupId: string | null;
+  tabIndex: number;
   title: string;
   url: string;
-  tabIndex: number;
-  isPinned?: boolean;
-  isAudible?: boolean;
-  isUnloaded?: boolean;
-  groupId?: string;
-  windowId: string;
-  faviconUrl?: string;
-  lastActiveAt: number; // epoch seconds (not milliseconds)
-  lastUsedAgent: string; // maps from device
-  incognito: boolean; // maps from isIncognito
-  scrollPosition?: ScrollPosition;
-  storage?: StorageInfo;
+  faviconUrl: string | null;
+  incognito: boolean;
+  scrollPosition: {
+    x: number;
+    y: number;
+  };
+  lastUsedAgent: string;
+  lastActiveAt: number; // epoch seconds
+  session: string;
+  cookie: string;
 }
 
 /**
  * Converts client TabInfo to server-compatible format
  */
-function convertToServerTabInfo(tab: TabInfo): ServerTabInfo {
+function convertToServerTabInfo(tab: TabInfo): BrowserTabInfoDto {
   return {
-    id: tab.id,
+    windowId: tab.windowId,
+    groupId: tab.groupId === "-1" ? null : tab.groupId,
+    tabIndex: tab.tabIndex,
     title: tab.title,
     url: tab.url,
-    tabIndex: tab.tabIndex,
-    isPinned: tab.isPinned,
-    isAudible: tab.isAudible,
-    isUnloaded: tab.isUnloaded,
-    groupId: tab.groupId,
-    windowId: tab.windowId,
-    faviconUrl: tab.faviconUrl,
+    faviconUrl: tab.faviconUrl ?? null,
+    incognito: tab.isIncognito,
+    scrollPosition: {
+      x: tab.scrollPosition?.x ?? 0,
+      y: tab.scrollPosition?.y ?? 0,
+    },
+    lastUsedAgent: tab.device,
     lastActiveAt: Math.floor(tab.lastActiveAt / 1000), // Convert ms to seconds
-    lastUsedAgent: tab.device, // Rename field
-    incognito: tab.isIncognito, // Rename field
-    scrollPosition: tab.scrollPosition,
-    storage: tab.storage,
+    session: tab.storage?.session ?? "{}",
+    cookie: tab.storage?.cookies ?? "[]",
   };
 }
 
@@ -51,10 +51,9 @@ function convertToServerTabInfo(tab: TabInfo): ServerTabInfo {
  */
 export interface TabGroupResponse {
   id: string;
-  createdAt: number;
   secret: string;
   salt: string;
-  browserTabInfos: ServerTabInfo[];
+  browserTabInfos: BrowserTabInfoDto[];
 }
 
 export interface QRCodeResponse {
