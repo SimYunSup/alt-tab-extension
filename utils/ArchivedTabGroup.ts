@@ -48,7 +48,7 @@ export async function archiveTabGroup(
       return null;
     }
 
-    return await response.json();
+    return await response.json() as TabGroupResponse;
   } catch (error) {
     console.error("Error archiving tab group:", error);
     return null;
@@ -75,8 +75,8 @@ export async function getArchivedTabGroups(): Promise<TabGroupResponse[]> {
       return [];
     }
 
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
+    const data: TabGroupResponse[] | unknown = await response.json();
+    return Array.isArray(data) ? data as TabGroupResponse[] : [];
   } catch (error) {
     console.error("Error fetching archived tab groups:", error);
     return [];
@@ -134,7 +134,7 @@ export async function generateQRCode(id: string): Promise<string | null> {
       return null;
     }
 
-    const data: QRCodeResponse = await response.json();
+    const data = await response.json() as QRCodeResponse;
     return `${import.meta.env.VITE_OAUTH_BASE_URL}${data.path}`;
   } catch (error) {
     console.error("Error generating QR code:", error);

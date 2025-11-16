@@ -1,8 +1,8 @@
-import type { hash as nodeHash } from "@node-rs/argon2";
+import type { hashRaw as nodeHashRaw } from "@node-rs/argon2";
 // @ts-expect-error becuase @node-rs/argon2/browser.d.ts does not export
-import { hash } from "@node-rs/argon2/browser";
+import { hashRaw } from "@node-rs/argon2/browser";
 
-const browserHash = hash as typeof nodeHash;
+const browserHashRaw = hashRaw as typeof nodeHashRaw;
 
 const SALT_LENGTH_BYTES = 16;         // Recommended salt length for Argon2
 const IV_LENGTH_BYTES = 12;           // Recommended length for AES-GCM IV
@@ -57,7 +57,7 @@ export async function importAesKey(keyBytes: Uint8Array) {
   }
   return crypto.subtle.importKey(
     "raw",
-    keyBytes,
+    keyBytes.buffer as ArrayBuffer,
     { name: "AES-GCM" },
     false, // not extractable
     ["encrypt", "decrypt"]
@@ -68,9 +68,9 @@ export async function importAesKey(keyBytes: Uint8Array) {
 export async function aesGcmEncrypt(dataBytes: Uint8Array, key: CryptoKey) {
   const iv = generateRandomBytes(IV_LENGTH_BYTES);
   const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv },
+    { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
     key,
-    dataBytes
+    dataBytes.buffer as ArrayBuffer
   );
   return { ciphertext: new Uint8Array(ciphertext), iv: iv };
 }
@@ -79,9 +79,9 @@ export async function aesGcmEncrypt(dataBytes: Uint8Array, key: CryptoKey) {
 export async function aesGcmDecrypt(ciphertext: Uint8Array, key: CryptoKey, iv: Uint8Array) {
   try {
     const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: iv },
+      { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
       key,
-      ciphertext
+      ciphertext.buffer as ArrayBuffer
     );
     return new Uint8Array(decrypted);
   } catch (error) {
@@ -91,7 +91,7 @@ export async function aesGcmDecrypt(ciphertext: Uint8Array, key: CryptoKey, iv: 
 }
 
 /** Hashes PIN with salt using Argon2 */
-export async function hashPinWithArgon(pin: string, salt: Uint8Array) {
+export async function hashPinWithArgon(pin: string, salt: Uint8Array): Promise<Uint8Array> {
   if (!pin || pin.length === 0) {
     throw new Error("PIN cannot be empty.");
   }
@@ -100,15 +100,15 @@ export async function hashPinWithArgon(pin: string, salt: Uint8Array) {
   }
 
   try {
-    const hashResult = await browserHash(
+    const hashResult = await browserHashRaw(
       pin,
       {
-        salt: salt,
+        salt: Buffer.from(salt),
         outputLen: ARGON2_HASH_LENGTH_BYTES,
         algorithm: ARGON2_TYPE,
       }
     );
-    return hashResult;
+    return new Uint8Array(hashResult);
   } catch (error) {
     console.error("Argon2 hashing failed:", error);
     throw new Error("PIN hashing failed.");

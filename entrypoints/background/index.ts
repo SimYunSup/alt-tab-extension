@@ -310,8 +310,8 @@ export default defineBackground(() => {
   init();
 });
 
-async function onActivated(info: chrome.tabs.TabActiveInfo) {
-  let tab: chrome.tabs.Tab | undefined;
+async function onActivated(info: Browser.tabs.OnActivatedInfo) {
+  let tab: Browser.tabs.Tab | undefined;
   try {
     tab = await browser.tabs.get(info.tabId);
   } catch (error) {
