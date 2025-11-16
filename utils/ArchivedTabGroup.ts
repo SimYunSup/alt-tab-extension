@@ -54,6 +54,7 @@ export interface TabGroupResponse {
   secret: string;
   salt: string;
   browserTabInfos: BrowserTabInfoDto[];
+  createdAt?: number; // epoch seconds (optional, for UI display)
 }
 
 export interface QRCodeResponse {
@@ -95,7 +96,36 @@ export async function archiveTabGroup(
       return null;
     }
 
-    return await response.json() as TabGroupResponse;
+    // Check if response has content before parsing
+    const contentLength = response.headers.get("content-length");
+    const contentType = response.headers.get("content-type");
+
+    if (contentLength === "0" || !contentType?.includes("application/json")) {
+      // Backend returned success but no JSON body
+      console.log("Tab group archived successfully (no response body)");
+      return {
+        id: "unknown",
+        secret,
+        salt,
+        browserTabInfos: tabs.map(convertToServerTabInfo),
+        createdAt: Math.floor(Date.now() / 1000),
+      };
+    }
+
+    const text = await response.text();
+    if (!text || text.trim() === "") {
+      // Empty response body
+      console.log("Tab group archived successfully (empty response body)");
+      return {
+        id: "unknown",
+        secret,
+        salt,
+        browserTabInfos: tabs.map(convertToServerTabInfo),
+        createdAt: Math.floor(Date.now() / 1000),
+      };
+    }
+
+    return JSON.parse(text) as TabGroupResponse;
   } catch (error) {
     console.error("Error archiving tab group:", error);
     return null;

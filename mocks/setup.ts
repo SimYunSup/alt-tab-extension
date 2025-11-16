@@ -60,6 +60,175 @@ function generateTokens(): TokenDto {
   };
 }
 
+// Create sample tab groups for testing
+function createSampleTabGroups() {
+  const now = Math.floor(Date.now() / 1000);
+
+  // Sample group 1: Development tabs
+  // Note: These are placeholder secrets/salts. PIN verification won't work with these.
+  // To test PIN verification, create a new tab group with your own PIN.
+  const group1: TabGroupResponse = {
+    id: 'sample-dev-tabs',
+    secret: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', // 32 bytes base64
+    salt: 'AAAAAAAAAAAAAAAAAAAAAA==', // 16 bytes base64
+    createdAt: now - 3600, // 1 hour ago
+    browserTabInfos: [
+      {
+        windowId: '1',
+        groupId: null,
+        tabIndex: 0,
+        title: 'GitHub - Your Repositories',
+        url: 'https://github.com',
+        faviconUrl: 'https://github.com/favicon.ico',
+        incognito: false,
+        scrollPosition: { x: 0, y: 150 },
+        lastUsedAgent: 'Chrome/120.0',
+        lastActiveAt: now - 3600,
+        session: '{}',
+        cookie: '[]',
+      },
+      {
+        windowId: '1',
+        groupId: null,
+        tabIndex: 1,
+        title: 'Stack Overflow - Where Developers Learn',
+        url: 'https://stackoverflow.com',
+        faviconUrl: 'https://stackoverflow.com/favicon.ico',
+        incognito: false,
+        scrollPosition: { x: 0, y: 0 },
+        lastUsedAgent: 'Chrome/120.0',
+        lastActiveAt: now - 3500,
+        session: '{}',
+        cookie: '[]',
+      },
+      {
+        windowId: '1',
+        groupId: null,
+        tabIndex: 2,
+        title: 'MDN Web Docs',
+        url: 'https://developer.mozilla.org',
+        faviconUrl: 'https://developer.mozilla.org/favicon.ico',
+        incognito: false,
+        scrollPosition: { x: 0, y: 300 },
+        lastUsedAgent: 'Chrome/120.0',
+        lastActiveAt: now - 3400,
+        session: '{}',
+        cookie: '[]',
+      },
+    ],
+  };
+
+  // Sample group 2: Shopping tabs
+  const group2: TabGroupResponse = {
+    id: 'sample-shopping-tabs',
+    secret: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=', // 32 bytes base64
+    salt: 'BBBBBBBBBBBBBBBBBBBBBB==', // 16 bytes base64
+    createdAt: now - 86400, // 1 day ago
+    browserTabInfos: [
+      {
+        windowId: '2',
+        groupId: null,
+        tabIndex: 0,
+        title: 'Amazon.com: Online Shopping',
+        url: 'https://www.amazon.com',
+        faviconUrl: 'https://www.amazon.com/favicon.ico',
+        incognito: false,
+        scrollPosition: { x: 0, y: 500 },
+        lastUsedAgent: 'Chrome/120.0',
+        lastActiveAt: now - 86400,
+        session: '{}',
+        cookie: '[]',
+      },
+      {
+        windowId: '2',
+        groupId: null,
+        tabIndex: 1,
+        title: 'eBay | Electronics, Cars, Fashion',
+        url: 'https://www.ebay.com',
+        faviconUrl: 'https://www.ebay.com/favicon.ico',
+        incognito: false,
+        scrollPosition: { x: 0, y: 200 },
+        lastUsedAgent: 'Chrome/120.0',
+        lastActiveAt: now - 86300,
+        session: '{}',
+        cookie: '[]',
+      },
+    ],
+  };
+
+  // Sample group 3: Research tabs
+  const group3: TabGroupResponse = {
+    id: 'sample-research-tabs',
+    secret: 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=', // 32 bytes base64
+    salt: 'CCCCCCCCCCCCCCCCCCCCCC==', // 16 bytes base64
+    createdAt: now - 604800, // 1 week ago
+    browserTabInfos: [
+      {
+        windowId: '3',
+        groupId: null,
+        tabIndex: 0,
+        title: 'Wikipedia, the free encyclopedia',
+        url: 'https://www.wikipedia.org',
+        faviconUrl: 'https://www.wikipedia.org/favicon.ico',
+        incognito: false,
+        scrollPosition: { x: 0, y: 0 },
+        lastUsedAgent: 'Chrome/120.0',
+        lastActiveAt: now - 604800,
+        session: '{}',
+        cookie: '[]',
+      },
+      {
+        windowId: '3',
+        groupId: null,
+        tabIndex: 1,
+        title: 'Google Scholar',
+        url: 'https://scholar.google.com',
+        faviconUrl: 'https://scholar.google.com/favicon.ico',
+        incognito: false,
+        scrollPosition: { x: 0, y: 100 },
+        lastUsedAgent: 'Chrome/120.0',
+        lastActiveAt: now - 604700,
+        session: '{}',
+        cookie: '[]',
+      },
+      {
+        windowId: '3',
+        groupId: null,
+        tabIndex: 2,
+        title: 'arXiv.org e-Print archive',
+        url: 'https://arxiv.org',
+        faviconUrl: 'https://arxiv.org/favicon.ico',
+        incognito: false,
+        scrollPosition: { x: 0, y: 250 },
+        lastUsedAgent: 'Chrome/120.0',
+        lastActiveAt: now - 604600,
+        session: '{}',
+        cookie: '[]',
+      },
+      {
+        windowId: '3',
+        groupId: null,
+        tabIndex: 3,
+        title: 'ResearchGate | Find and share research',
+        url: 'https://www.researchgate.net',
+        faviconUrl: 'https://www.researchgate.net/favicon.ico',
+        incognito: false,
+        scrollPosition: { x: 0, y: 0 },
+        lastUsedAgent: 'Chrome/120.0',
+        lastActiveAt: now - 604500,
+        session: '{}',
+        cookie: '[]',
+      },
+    ],
+  };
+
+  store.tabGroups.set(group1.id, group1);
+  store.tabGroups.set(group2.id, group2);
+  store.tabGroups.set(group3.id, group3);
+
+  console.log('[Mock API] Created 3 sample tab groups');
+}
+
 const originalFetch = globalThis.fetch;
 
 async function mockFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -168,6 +337,7 @@ async function mockFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
       secret: body.secret,
       salt: body.salt,
       browserTabInfos: body.browserTabInfos,
+      createdAt: Math.floor(Date.now() / 1000), // epoch seconds
     };
 
     store.tabGroups.set(id, tabGroup);
@@ -199,6 +369,7 @@ async function mockFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
 export function setupMockAPI() {
   console.log('[Mock API] Setting up mock API...');
   globalThis.fetch = mockFetch;
+  createSampleTabGroups();
   console.log('[Mock API] Mock API is now active');
 }
 

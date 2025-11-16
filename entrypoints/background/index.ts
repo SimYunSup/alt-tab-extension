@@ -121,8 +121,8 @@ export default defineBackground(() => {
       if (!tab.id) {
         return;
       }
-      // Handle OAuth flow first - don't track OAuth tabs at all
-      if (tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL)) {
+      // Handle OAuth flow first - only handle actual OAuth callback URLs (with access_token in hash)
+      if (tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL) && tab.url.includes("#access_token=")) {
         const tokens = detectOauthFlow(tab.url);
         try {
           await browser.tabs.remove(tab.id);
@@ -146,8 +146,8 @@ export default defineBackground(() => {
       if (!tab.id) {
         return;
       }
-      // Handle OAuth flow first - remove from storage if it exists
-      if (tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL)) {
+      // Handle OAuth flow first - only handle actual OAuth callback URLs (with access_token in hash)
+      if (tab.url?.includes(import.meta.env.VITE_OAUTH_BASE_URL) && tab.url.includes("#access_token=")) {
         // Remove OAuth tab from storage if it was added
         let tabs = await currentTabStorage.getValue();
         if (tabs && tabs[tabId]) {
@@ -411,10 +411,11 @@ async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTab
     lastActiveAt: clientInfo.lastActiveAt,
     device: navigator.userAgent,
     isIncognito: tab.incognito,
-    scrollPosition: tabInfo?.scrollPosition,
+    scrollPosition: tabInfo?.scrollPosition ?? { x: 0, y: 0 },
     storage: {
-      ...tabInfo?.storage,
-      cookies: cookies ? JSON.stringify(cookies) : undefined,
+      session: tabInfo?.storage?.session ?? "{}",
+      local: tabInfo?.storage?.local ?? "{}",
+      cookies: cookies ? JSON.stringify(cookies) : "[]",
     },
   } satisfies TabInfo;
 }
