@@ -1,4 +1,4 @@
-import { defineWebExtConfig } from "wxt/modules";
+import { defineWebExtConfig } from "wxt";
 
 export default defineWebExtConfig({
   // Persist Chrome/Chromium data across development sessions

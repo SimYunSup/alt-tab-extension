@@ -12,6 +12,11 @@ import {
   Lock,
   Search,
   XIcon,
+  Globe,
+  Pin,
+  Volume2,
+  Layers,
+  X,
 } from "lucide-react";
 import { sendMessage } from "webext-bridge/popup";
 import { Badge } from "@/entrypoints/components/ui/badge";
@@ -59,6 +64,7 @@ function TabItem({
   settings,
 }: TabItemProps) {
   const [now, setNow] = React.useState(() => Date.now());
+  const [isHovered, setIsHovered] = React.useState(false);
   React.useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     function setNowInterval() {
@@ -78,18 +84,32 @@ function TabItem({
     !closeRule.allowPinnedTab && tab.isPinned ||
     closeRule.ignoreUnloadedTab && tab.isUnloaded ||
     !closeRule.ignoreAudibleTab && tab.isAudible ||
-    closeRule.ignoreContainerTabs && tab.groupId
+    closeRule.ignoreContainerTab && tab.groupId
     ;
+
+  const handleQuickClose = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await browser.tabs.remove(Number(tab.id));
+    } catch (error) {
+      console.error("Failed to close tab:", error);
+    }
+  };
+
   return (
     <button
       className={cn(
-        "w-full flex items-center p-2 rounded-md group hover:bg-slate-100 transition-colors cursor-pointer",
-        selected && "bg-slate-100",
+        "w-full flex items-center p-2 rounded-md group transition-all cursor-pointer border-2",
+        selected
+          ? "bg-blue-50 border-blue-300 shadow-sm"
+          : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-200",
       )}
       onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <div className="relative mr-3">
-        <div className="size-8 flex items-center justify-center bg-white rounded-md overflow-hidden shadow-sm">
+        <div className="size-8 flex items-center justify-center bg-white rounded-md overflow-hidden shadow-sm border border-slate-200">
           {tab.faviconUrl ? (
             <img
               src={tab.faviconUrl}
@@ -97,30 +117,61 @@ function TabItem({
               className="size-5"
             />
           ) : (
-            <span className="text-sm font-medium text-slate-700 size-5"></span>
+            <Globe className="size-4 text-slate-400" />
           )}
         </div>
+        {selected && (
+          <div className="absolute -top-1 -right-1 size-4 bg-blue-500 rounded-full flex items-center justify-center">
+            <svg className="size-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 min-w-0 mr-2">
-        <div className="text-sm font-medium text-slate-900 truncate text-start">{tab.title}</div>
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-sm font-medium text-slate-900 truncate text-start">{tab.title || "제목 없음"}</span>
+          {tab.isPinned && (
+            <Pin className="size-3 text-blue-500 flex-shrink-0" />
+          )}
+          {tab.isAudible && (
+            <Volume2 className="size-3 text-green-500 flex-shrink-0" />
+          )}
+          {tab.groupId !== "-1" && (
+            <Layers className="size-3 text-purple-500 flex-shrink-0" />
+          )}
+        </div>
         <div className="flex items-center">
           <span className="text-xs text-slate-500 truncate">{tab.url}</span>
         </div>
       </div>
 
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <Clock className="size-3 text-slate-400" />
-        {closeRule ? (
-          <span
-            className={cn(
-              "text-xs px-1.5 py-0.5 rounded-full font-medium",
-              isLocked ? "text-slate-400 bg-slate-100" : getTimeColor((tab.lastActiveAt + closeRule.idleTimeout * 60 * 1000 - Date.now()) / 1000, 600),
-            )}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        {isHovered && !selected ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 hover:bg-red-100 hover:text-red-600"
+            onClick={handleQuickClose}
           >
-            {isLocked ? "잠금" : formatRemainingTime(tab.lastActiveAt + closeRule.idleTimeout * 60 * 1000 - Date.now())}
-          </span>
-        ) : null}
+            <X className="size-3.5" />
+          </Button>
+        ) : (
+          <>
+            <Clock className="size-3 text-slate-400" />
+            {closeRule ? (
+              <span
+                className={cn(
+                  "text-xs px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap",
+                  isLocked ? "text-slate-400 bg-slate-100" : getTimeColor((tab.lastActiveAt + closeRule.idleTimeout * 60 * 1000 - Date.now()) / 1000, 600),
+                )}
+              >
+                {isLocked ? "잠금" : formatRemainingTime(tab.lastActiveAt + closeRule.idleTimeout * 60 * 1000 - Date.now())}
+              </span>
+            ) : null}
+          </>
+        )}
       </div>
     </button>
   );
@@ -240,6 +291,7 @@ export const CurrentTabs = () => {
     closeTab(Array.from(selectedTabs));
     setSelectedTabs(new Set());
   };
+
   if (!tabs) {
     return (
       <div className="w-full h-full flex items-center justify-center">
@@ -296,27 +348,47 @@ export const CurrentTabs = () => {
       </div>
       <ScrollArea className="flex-1 w-full h-full">
         <div className="p-2 w-[calc(100vw-var(--spacing)*2)] h-full">
-          {Object.entries(tabWindows).map(([windowId, tabs]) => (
-            <div key={windowId} className="h-full flex flex-col gap-2">
-              {tabs.map((tab) => (
-                <TabItem
-                  key={tab.id}
-                  tab={tab}
-                  settings={settings}
-                  selected={selectedTabs.has(tab.id)}
-                  onClick={() => setSelectedTabs((prev) => {
-                    if (prev.has(tab.id)) {
-                      prev.delete(tab.id);
-                    } else {
-                      prev.add(tab.id);
-                    }
-                    return new Set(prev);
-                  })}
-                />
-              ))}
-              <Separator className="my-1" />
+          {Object.keys(filteredTabs).length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full py-12">
+              <div className="size-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                {searchQuery ? (
+                  <Search className="size-8 text-slate-400" />
+                ) : (
+                  <Eye className="size-8 text-slate-400" />
+                )}
+              </div>
+              <h3 className="text-lg font-medium text-slate-900 mb-2">
+                {searchQuery ? "검색 결과 없음" : "열린 탭이 없습니다"}
+              </h3>
+              <p className="text-sm text-slate-500 text-center max-w-xs">
+                {searchQuery
+                  ? `"${searchQuery}"와 일치하는 탭을 찾을 수 없습니다`
+                  : "새 탭을 열어보세요"}
+              </p>
             </div>
-          ))}
+          ) : (
+            Object.entries(tabWindows).map(([windowId, tabs]) => (
+              <div key={windowId} className="h-full flex flex-col gap-2">
+                {tabs.map((tab) => (
+                  <TabItem
+                    key={tab.id}
+                    tab={tab}
+                    settings={settings}
+                    selected={selectedTabs.has(tab.id)}
+                    onClick={() => setSelectedTabs((prev) => {
+                      if (prev.has(tab.id)) {
+                        prev.delete(tab.id);
+                      } else {
+                        prev.add(tab.id);
+                      }
+                      return new Set(prev);
+                    })}
+                  />
+                ))}
+                <Separator className="my-1" />
+              </div>
+            ))
+          )}
         </div>
       </ScrollArea>
 
