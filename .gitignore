@@ -24,4 +24,5 @@ stats-*.json
 *.sln
 *.sw?
 .env*
+!.env.example
 .env

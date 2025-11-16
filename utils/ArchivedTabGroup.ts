@@ -1,5 +1,50 @@
 import { accessTokenStorage } from "./storage";
-import type { TabInfo } from "./Tab";
+import type { TabInfo, ScrollPosition, StorageInfo } from "./Tab";
+
+/**
+ * Server-compatible tab info structure
+ * Maps to backend's BrowserTabInfoDto
+ */
+export interface ServerTabInfo {
+  id: string;
+  title: string;
+  url: string;
+  tabIndex: number;
+  isPinned?: boolean;
+  isAudible?: boolean;
+  isUnloaded?: boolean;
+  groupId?: string;
+  windowId: string;
+  faviconUrl?: string;
+  lastActiveAt: number; // epoch seconds (not milliseconds)
+  lastUsedAgent: string; // maps from device
+  incognito: boolean; // maps from isIncognito
+  scrollPosition?: ScrollPosition;
+  storage?: StorageInfo;
+}
+
+/**
+ * Converts client TabInfo to server-compatible format
+ */
+function convertToServerTabInfo(tab: TabInfo): ServerTabInfo {
+  return {
+    id: tab.id,
+    title: tab.title,
+    url: tab.url,
+    tabIndex: tab.tabIndex,
+    isPinned: tab.isPinned,
+    isAudible: tab.isAudible,
+    isUnloaded: tab.isUnloaded,
+    groupId: tab.groupId,
+    windowId: tab.windowId,
+    faviconUrl: tab.faviconUrl,
+    lastActiveAt: Math.floor(tab.lastActiveAt / 1000), // Convert ms to seconds
+    lastUsedAgent: tab.device, // Rename field
+    incognito: tab.isIncognito, // Rename field
+    scrollPosition: tab.scrollPosition,
+    storage: tab.storage,
+  };
+}
 
 /**
  * Server response types for Tab Group API
@@ -9,7 +54,7 @@ export interface TabGroupResponse {
   createdAt: number;
   secret: string;
   salt: string;
-  browserTabInfos: TabInfo[];
+  browserTabInfos: ServerTabInfo[];
 }
 
 export interface QRCodeResponse {
@@ -30,6 +75,9 @@ export async function archiveTabGroup(
 ): Promise<TabGroupResponse | null> {
   try {
     const token = await accessTokenStorage.getValue();
+    // Convert client TabInfo to server-compatible format
+    const serverTabInfos = tabs.map(convertToServerTabInfo);
+
     const response = await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/tab-group`, {
       method: "POST",
       headers: {
@@ -39,7 +87,7 @@ export async function archiveTabGroup(
       body: JSON.stringify({
         secret,
         salt,
-        browserTabInfos: tabs,
+        browserTabInfos: serverTabInfos,
       }),
     });
 
