@@ -523,26 +523,26 @@ export function ArchiveTabs() {
 
       {/* QR Code Dialog */}
       <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <QrCode className="h-5 w-5" />
+        <DialogContent className="max-w-[calc(100%-1rem)] p-4">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <QrCode className="h-4 w-4" />
               QR 코드로 공유
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs">
               QR 코드를 스캔하거나 링크를 복사하여 공유하세요.
               <br />
               <span className="text-amber-600 font-medium">이 링크는 10분간 유효합니다.</span>
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col items-center gap-4 py-4">
+          <div className="flex flex-col items-center gap-3 py-2">
             {qrCodeUrl ? (
-              <div className="bg-white p-4 rounded-lg shadow-inner border">
-                <img src={qrCodeUrl} alt="QR Code" className="w-56 h-56" />
+              <div className="bg-white p-3 rounded-lg shadow-inner border">
+                <img src={qrCodeUrl} alt="QR Code" className="w-40 h-40" />
               </div>
             ) : (
-              <div className="w-64 h-64 flex items-center justify-center bg-slate-100 rounded-lg">
-                <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <div className="w-40 h-40 flex items-center justify-center bg-slate-100 rounded-lg">
+                <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
             )}
 
@@ -554,23 +554,23 @@ export function ArchiveTabs() {
                     type="text"
                     value={qrShareUrl}
                     readOnly
-                    className="flex-1 text-xs bg-slate-50 border rounded-md px-3 py-2 text-slate-600 truncate"
+                    className="flex-1 text-xs bg-slate-50 border rounded-md px-2 py-1.5 text-slate-600 truncate"
                   />
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={copyShareUrl}
-                    className="flex-shrink-0"
+                    className="flex-shrink-0 h-7 px-2"
                   >
                     {isCopied ? (
                       <>
-                        <Check className="h-4 w-4 mr-1 text-green-600" />
-                        복사됨
+                        <Check className="h-3 w-3 mr-1 text-green-600" />
+                        <span className="text-xs">복사됨</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="h-4 w-4 mr-1" />
-                        복사
+                        <Copy className="h-3 w-3 mr-1" />
+                        <span className="text-xs">복사</span>
                       </>
                     )}
                   </Button>
@@ -578,8 +578,8 @@ export function ArchiveTabs() {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsQrDialogOpen(false)}>
+          <DialogFooter className="pt-0">
+            <Button variant="outline" size="sm" onClick={() => setIsQrDialogOpen(false)}>
               닫기
             </Button>
           </DialogFooter>
