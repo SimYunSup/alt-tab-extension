@@ -351,6 +351,42 @@ export default defineBackground(() => {
       return false;
     }
   });
+
+  // Handle external messages from web app (for tab restoration)
+  browser.runtime.onMessageExternal.addListener(
+    (message: { type: string; tabs?: Array<{ url: string; title?: string }> }, _sender, sendResponse) => {
+      console.log("[Background] Received external message:", message);
+
+      if (message.type === "ping") {
+        // Extension is installed, respond with confirmation
+        sendResponse({ success: true, version: "0.0.1" });
+        return true;
+      }
+
+      if (message.type === "restore_tabs" && message.tabs) {
+        // Restore tabs from shared tab group
+        (async () => {
+          try {
+            for (const tab of message.tabs!) {
+              await browser.tabs.create({
+                url: tab.url,
+                active: false,
+              });
+            }
+            sendResponse({ success: true, count: message.tabs!.length });
+          } catch (error) {
+            console.error("[Background] Failed to restore tabs:", error);
+            sendResponse({ success: false, error: String(error) });
+          }
+        })();
+        return true; // Keep the message channel open for async response
+      }
+
+      sendResponse({ success: false, error: "Unknown message type" });
+      return true;
+    }
+  );
+
   init();
 });
 

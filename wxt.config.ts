@@ -43,6 +43,13 @@ export default defineConfig({
       content_security_policy: {
         extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
       },
+      externally_connectable: {
+        matches: [
+          "http://localhost:*/*",
+          "https://*.alt-tab.app/*",
+          // Add your production domain here
+        ],
+      },
     };
     if (mode === "development") {
       if (browser === "chrome" || browser === "edge") {
