@@ -31,3 +31,11 @@ export const refreshTokenStorage = storage.defineItem<string | null>(
     fallback: null,
   }
 );
+
+// Store creation times for tab groups (id -> epoch seconds)
+export const tabGroupCreatedAtStorage = storage.defineItem<Record<string, number>>(
+  "local:tabGroupCreatedAt",
+  {
+    fallback: {},
+  }
+);

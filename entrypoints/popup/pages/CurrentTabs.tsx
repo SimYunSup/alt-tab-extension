@@ -186,6 +186,8 @@ export const CurrentTabs = () => {
   const [pinError, setPinError] = React.useState<string | null>(null);
   const [isArchiving, setIsArchiving] = React.useState(false);
   const [archiveSuccess, setArchiveSuccess] = React.useState(false);
+  const [tabsToArchive, setTabsToArchive] = React.useState<number[]>([]);
+  const archivedCountRef = React.useRef(0);
   const {
     tabs,
     closeTab,
@@ -201,7 +203,7 @@ export const CurrentTabs = () => {
 
   React.useEffect(() => {
     setSelectedTabs(new Set());
-  }, [searchQuery, tabs]);
+  }, [searchQuery]);
 
   React.useEffect(() => {
     const intervalId = setInterval(() => {
@@ -236,6 +238,9 @@ export const CurrentTabs = () => {
 
   const onClickArchiveButton = () => {
     if (selectedTabs.size === 0) return;
+    // Save selected tab IDs before opening dialog
+    const tabIds = Array.from(selectedTabs, (id) => parseInt(id));
+    setTabsToArchive(tabIds);
     setPinValue("");
     setPinError(null);
     setArchiveSuccess(false);
@@ -252,21 +257,29 @@ export const CurrentTabs = () => {
     setPinError(null);
 
     try {
+      console.log("[Archive] Step 1: Starting PIN hashing...");
+      console.log("[Archive] Tabs to archive:", tabsToArchive);
       // Generate secret and salt from PIN
       const { secret, salt } = await generateSecretAndSaltFromPin(pinValue);
+      console.log("[Archive] Step 2: PIN hashing complete, sending to background...");
+
+      console.log("[Archive] Tab IDs to send:", tabsToArchive);
 
       // Send to background script
       const result = await sendMessage(
         "send-tab-group",
         {
-          tabIds: Array.from(selectedTabs, (id) => parseInt(id)),
+          tabIds: tabsToArchive,
           secret,
           salt,
         },
         "background"
       );
+      console.log("[Archive] Step 3: Background response received:", result);
 
       if (result) {
+        console.log("[Archive] Success! Archived tabs count:", tabsToArchive.length);
+        archivedCountRef.current = tabsToArchive.length;
         setArchiveSuccess(true);
         setSelectedTabs(new Set());
 
@@ -275,12 +288,14 @@ export const CurrentTabs = () => {
           setIsPinDialogOpen(false);
           setArchiveSuccess(false);
           setPinValue("");
+          setTabsToArchive([]);
+          archivedCountRef.current = 0;
         }, 1500);
       } else {
         setPinError("탭 그룹 아카이브에 실패했습니다. 다시 시도해주세요.");
       }
     } catch (error) {
-      console.error("Failed to archive tab group:", error);
+      console.error("[Archive] Error:", error);
       setPinError("오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setIsArchiving(false);
@@ -420,7 +435,7 @@ export const CurrentTabs = () => {
                 <Lock className="h-8 w-8 text-green-600" />
               </div>
               <p className="text-sm text-muted-foreground text-center">
-                {selectedTabs.size}개의 탭이 안전하게 저장되었습니다
+                {archivedCountRef.current}개의 탭이 안전하게 저장되었습니다
               </p>
             </div>
           ) : (
@@ -435,9 +450,11 @@ export const CurrentTabs = () => {
                 <InputOTP
                   maxLength={6}
                   value={pinValue}
-                  onChange={setPinValue}
+                  onChange={(value) => setPinValue(value.replace(/[^0-9]/g, ""))}
                   disabled={isArchiving}
                   onComplete={confirmArchive}
+                  pattern="[0-9]*"
+                  inputMode="numeric"
                 >
                   <InputOTPGroup>
                     <InputOTPSlot index={0} />

@@ -2,14 +2,59 @@ import { accessTokenStorage } from "./storage";
 import type { TabInfo } from "./Tab";
 
 /**
+ * Server-compatible tab info structure
+ * Maps to backend's BrowserTabInfoDto
+ */
+export interface BrowserTabInfoDto {
+  windowId: string;
+  groupId: string | null;
+  tabIndex: number;
+  title: string;
+  url: string;
+  faviconUrl: string | null;
+  incognito: boolean;
+  scrollPosition: {
+    x: number;
+    y: number;
+  };
+  lastUsedAgent: string;
+  lastActiveAt: number; // epoch seconds
+  session: string;
+  cookie: string;
+}
+
+/**
+ * Converts client TabInfo to server-compatible format
+ */
+function convertToServerTabInfo(tab: TabInfo): BrowserTabInfoDto {
+  return {
+    windowId: tab.windowId,
+    groupId: tab.groupId === "-1" ? null : tab.groupId,
+    tabIndex: tab.tabIndex,
+    title: tab.title,
+    url: tab.url,
+    faviconUrl: tab.faviconUrl ?? null,
+    incognito: tab.isIncognito,
+    scrollPosition: {
+      x: tab.scrollPosition?.x ?? 0,
+      y: tab.scrollPosition?.y ?? 0,
+    },
+    lastUsedAgent: tab.device,
+    lastActiveAt: Math.floor(tab.lastActiveAt / 1000), // Convert ms to seconds
+    session: tab.storage?.session ?? "{}",
+    cookie: tab.storage?.cookies ?? "[]",
+  };
+}
+
+/**
  * Server response types for Tab Group API
  */
 export interface TabGroupResponse {
   id: string;
-  createdAt: number;
   secret: string;
   salt: string;
-  browserTabInfos: TabInfo[];
+  browserTabInfos: BrowserTabInfoDto[];
+  createdAt?: number; // epoch seconds (optional, for UI display)
 }
 
 export interface QRCodeResponse {
@@ -30,6 +75,9 @@ export async function archiveTabGroup(
 ): Promise<TabGroupResponse | null> {
   try {
     const token = await accessTokenStorage.getValue();
+    // Convert client TabInfo to server-compatible format
+    const serverTabInfos = tabs.map(convertToServerTabInfo);
+
     const response = await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/tab-group`, {
       method: "POST",
       headers: {
@@ -39,7 +87,7 @@ export async function archiveTabGroup(
       body: JSON.stringify({
         secret,
         salt,
-        browserTabInfos: tabs,
+        browserTabInfos: serverTabInfos,
       }),
     });
 
@@ -48,7 +96,36 @@ export async function archiveTabGroup(
       return null;
     }
 
-    return await response.json() as TabGroupResponse;
+    // Check if response has content before parsing
+    const contentLength = response.headers.get("content-length");
+    const contentType = response.headers.get("content-type");
+
+    if (contentLength === "0" || !contentType?.includes("application/json")) {
+      // Backend returned success but no JSON body
+      console.log("Tab group archived successfully (no response body)");
+      return {
+        id: "unknown",
+        secret,
+        salt,
+        browserTabInfos: tabs.map(convertToServerTabInfo),
+        createdAt: Math.floor(Date.now() / 1000),
+      };
+    }
+
+    const text = await response.text();
+    if (!text || text.trim() === "") {
+      // Empty response body
+      console.log("Tab group archived successfully (empty response body)");
+      return {
+        id: "unknown",
+        secret,
+        salt,
+        browserTabInfos: tabs.map(convertToServerTabInfo),
+        createdAt: Math.floor(Date.now() / 1000),
+      };
+    }
+
+    return JSON.parse(text) as TabGroupResponse;
   } catch (error) {
     console.error("Error archiving tab group:", error);
     return null;
