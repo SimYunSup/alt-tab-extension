@@ -2,7 +2,6 @@
 // This runs on the web app domain to enable communication
 
 import { browser } from "wxt/browser";
-import { defineContentScript } from "wxt/sandbox";
 
 export default defineContentScript({
   matches: [
