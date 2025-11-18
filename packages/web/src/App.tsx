@@ -12,9 +12,6 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-// Extension ID - should be configured for production
-const EXTENSION_ID = import.meta.env.VITE_EXTENSION_ID || "";
-
 // Backend API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
@@ -42,7 +39,6 @@ type AppState =
 
 function App() {
   const [state, setState] = useState<AppState>("loading");
-  const [tabGroupId, setTabGroupId] = useState<string | null>(null);
   const [tabGroupData, setTabGroupData] = useState<TabGroupData | null>(null);
   const [pinValue, setPinValue] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
@@ -60,7 +56,6 @@ function App() {
       return;
     }
 
-    setTabGroupId(id);
     fetchTabGroupData(id);
   }, []);
 
@@ -93,41 +88,36 @@ function App() {
   const checkExtension = () => {
     setState("checking_extension");
 
-    // Try to communicate with extension
-    if (!EXTENSION_ID) {
-      // No extension ID configured, show install prompt
-      setState("extension_not_found");
-      return;
-    }
+    // Listen for response from extension content script
+    const messageHandler = (event: MessageEvent) => {
+      if (event.data?.source !== "alt-tab-extension") return;
 
-    try {
-      // Send message to extension to check if it's installed
-      chrome.runtime.sendMessage(
-        EXTENSION_ID,
-        { type: "ping" },
-        (response) => {
-          if (chrome.runtime.lastError || !response) {
-            setExtensionDetected(false);
-            setState("extension_not_found");
-          } else {
-            setExtensionDetected(true);
-            setState("pin_input");
-          }
-        }
-      );
+      if (event.data.type === "pong" && event.data.data?.success) {
+        setExtensionDetected(true);
+        setState("pin_input");
+        window.removeEventListener("message", messageHandler);
+      }
+    };
 
-      // Timeout fallback
-      setTimeout(() => {
-        if (state === "checking_extension") {
-          setExtensionDetected(false);
-          setState("extension_not_found");
-        }
-      }, 2000);
-    } catch {
-      // Chrome API not available (Firefox or no extension)
-      setExtensionDetected(false);
-      setState("extension_not_found");
-    }
+    window.addEventListener("message", messageHandler);
+
+    // Send ping to extension via postMessage (handled by content script)
+    window.postMessage(
+      {
+        source: "alt-tab-web",
+        type: "ping",
+      },
+      "*"
+    );
+
+    // Timeout fallback - if no response, extension not installed
+    setTimeout(() => {
+      if (state === "checking_extension") {
+        setExtensionDetected(false);
+        setState("extension_not_found");
+        window.removeEventListener("message", messageHandler);
+      }
+    }, 2000);
   };
 
   // Verify PIN and restore tabs
@@ -151,25 +141,47 @@ function App() {
       }
 
       // PIN is correct, restore tabs
-      if (extensionDetected && EXTENSION_ID) {
+      if (extensionDetected) {
         setState("restoring");
-        // Send to extension
-        chrome.runtime.sendMessage(
-          EXTENSION_ID,
-          {
-            type: "restore_tabs",
-            tabs: tabGroupData.browserTabInfos,
-          },
-          (response) => {
-            if (response?.success) {
-              setRestoredCount(tabGroupData.browserTabInfos.length);
+
+        // Listen for response from extension
+        const restoreHandler = (event: MessageEvent) => {
+          if (event.data?.source !== "alt-tab-extension") return;
+
+          if (event.data.type === "restore_tabs_response") {
+            if (event.data.data?.success) {
+              setRestoredCount(event.data.data.count || tabGroupData.browserTabInfos.length);
               setState("success");
             } else {
               setErrorMessage("탭 복원에 실패했습니다.");
               setState("error");
             }
+            window.removeEventListener("message", restoreHandler);
           }
+        };
+
+        window.addEventListener("message", restoreHandler);
+
+        // Send restore request to extension via postMessage
+        window.postMessage(
+          {
+            source: "alt-tab-web",
+            type: "restore_tabs",
+            data: {
+              tabs: tabGroupData.browserTabInfos,
+            },
+          },
+          "*"
         );
+
+        // Timeout fallback
+        setTimeout(() => {
+          if (state === "restoring") {
+            setErrorMessage("탭 복원 시간이 초과되었습니다.");
+            setState("error");
+            window.removeEventListener("message", restoreHandler);
+          }
+        }, 10000);
       } else {
         // No extension, open tabs directly in browser
         setState("restoring");
