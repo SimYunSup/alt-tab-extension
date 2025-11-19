@@ -1,7 +1,7 @@
 // Content script for bridging web page and extension
 // This runs on the web app domain to enable communication
 
-import { browser } from "wxt/browser";
+import { browser, defineContentScript } from "#imports";
 
 export default defineContentScript({
   matches: [
