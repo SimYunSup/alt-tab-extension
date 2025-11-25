@@ -8,7 +8,6 @@ import {
   ArchiveIcon,
   Clock,
   Eye,
-  EyeOff,
   Lock,
   Search,
   XIcon,

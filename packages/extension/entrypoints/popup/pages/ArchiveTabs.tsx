@@ -1,6 +1,5 @@
 import React from "react";
 import { browser } from 'wxt/browser';
-import { ClientTabInfo } from "@/utils/Tab";
 import { Button } from "@/entrypoints/components/ui/button";
 import { Login } from "@/entrypoints/components/Login";
 import { Badge } from "@/entrypoints/components/ui/badge";
@@ -8,10 +7,8 @@ import { ScrollArea } from "@/entrypoints/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/entrypoints/components/ui/card";
 import { useToken } from "@/entrypoints/popup/hooks/useStorageValue";
 import { cn } from "@/utils";
-import { Clock, FolderOpen, QrCode, Trash } from "lucide-react";
-import { Separator } from "@/entrypoints/components/ui/separator";
+import { FolderOpen, QrCode, Trash } from "lucide-react";
 import { getArchivedTabGroups, deleteTabGroup, generateQRCode, type TabGroupResponse } from "@/utils/ArchivedTabGroup";
-import { formatTimeAgo } from "@/utils/time";
 export function ArchiveTabs() {
   const [token] = useToken();
 

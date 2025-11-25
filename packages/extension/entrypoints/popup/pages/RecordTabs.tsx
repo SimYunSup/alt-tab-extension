@@ -1,4 +1,4 @@
-import type { RecordTabInfo, TabInfo } from "@/utils/Tab";
+import type { RecordTabInfo } from "@/utils/Tab";
 
 import React from "react";
 import { browser } from 'wxt/browser';
