@@ -1,5 +1,5 @@
 import type { Browser } from "wxt/browser";
-import type { ClientTabInfo, TabInfo } from "@/utils/Tab";
+import type { ClientTabInfo, TabInfo, StorageInfo, ScrollPosition } from "@/utils/Tab";
 import type { Setting } from "@/types/data";
 
 import { browser } from 'wxt/browser';
@@ -14,7 +14,7 @@ import { archiveTabGroup } from "@/utils/ArchivedTabGroup";
 import { setupMockAPI } from '@/mocks/setup';
 
 // Enable mock API in development or when VITE_USE_MOCK_API is set
-if (import.meta.env.DEV || import.meta.env.VITE_USE_MOCK_API === 'true') {
+if (import.meta.env.VITE_USE_MOCK_API === 'true') {
   console.log('[Background] Setting up Mock API...');
   setupMockAPI();
 }
@@ -511,11 +511,11 @@ async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTab
     throw new Error("Tab ID is required for conversion");
   }
 
-  let tabInfo;
+  let tabInfo: { storage: StorageInfo, scrollPosition: ScrollPosition } | null = null;
   try {
     console.log("[Background] convertTabInfoServer: Sending get-tab-info message...");
     // Add timeout to prevent infinite waiting for content script response
-    const timeoutPromise = new Promise((_, reject) =>
+    const timeoutPromise = new Promise<null>((_, reject) =>
       setTimeout(() => reject(new Error("Content script timeout")), 3000)
     );
     tabInfo = await Promise.race([

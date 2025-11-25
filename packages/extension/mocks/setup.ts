@@ -86,6 +86,7 @@ function createSampleTabGroups() {
         lastActiveAt: now - 3600,
         session: '{}',
         cookie: '[]',
+        local: '{}',
       },
       {
         windowId: '1',
@@ -100,6 +101,7 @@ function createSampleTabGroups() {
         lastActiveAt: now - 3500,
         session: '{}',
         cookie: '[]',
+        local: '{}',
       },
       {
         windowId: '1',
@@ -114,6 +116,7 @@ function createSampleTabGroups() {
         lastActiveAt: now - 3400,
         session: '{}',
         cookie: '[]',
+        local: '{}',
       },
     ],
   };
@@ -138,6 +141,7 @@ function createSampleTabGroups() {
         lastActiveAt: now - 86400,
         session: '{}',
         cookie: '[]',
+        local: '{}',
       },
       {
         windowId: '2',
@@ -152,6 +156,7 @@ function createSampleTabGroups() {
         lastActiveAt: now - 86300,
         session: '{}',
         cookie: '[]',
+        local: '{}',
       },
     ],
   };
@@ -176,6 +181,7 @@ function createSampleTabGroups() {
         lastActiveAt: now - 604800,
         session: '{}',
         cookie: '[]',
+        local: '{}',
       },
       {
         windowId: '3',
@@ -190,6 +196,7 @@ function createSampleTabGroups() {
         lastActiveAt: now - 604700,
         session: '{}',
         cookie: '[]',
+        local: '{}',
       },
       {
         windowId: '3',
@@ -204,6 +211,7 @@ function createSampleTabGroups() {
         lastActiveAt: now - 604600,
         session: '{}',
         cookie: '[]',
+        local: '{}',
       },
       {
         windowId: '3',
@@ -218,6 +226,7 @@ function createSampleTabGroups() {
         lastActiveAt: now - 604500,
         session: '{}',
         cookie: '[]',
+        local: '{}',
       },
     ],
   };

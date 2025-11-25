@@ -1,5 +1,5 @@
-import { accessTokenStorage } from "./storage";
 import type { TabInfo } from "./Tab";
+import { apiClient, HTTPError } from "./api";
 import {
   base64ToArrayBuffer,
   importAesKey,
@@ -117,7 +117,6 @@ export async function archiveTabGroup(
   salt: string
 ): Promise<TabGroupResponse | null> {
   try {
-    const token = await accessTokenStorage.getValue();
     // Convert client TabInfo to server-compatible format with encryption
     console.log("[E2EE] Encrypting sensitive tab data...");
     const serverTabInfos = await Promise.all(
@@ -125,29 +124,13 @@ export async function archiveTabGroup(
     );
     console.log("[E2EE] Encryption complete for", serverTabInfos.length, "tabs");
 
-    const response = await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/tab-group`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        secret,
-        salt,
-        browserTabInfos: serverTabInfos,
-      }),
+    const result = await apiClient.post<TabGroupResponse | null>("tab-group", {
+      secret,
+      salt,
+      browserTabInfos: serverTabInfos,
     });
 
-    if (!response.ok) {
-      console.error("Failed to archive tab group", response.statusText);
-      return null;
-    }
-
-    // Check if response has content before parsing
-    const contentLength = response.headers.get("content-length");
-    const contentType = response.headers.get("content-type");
-
-    if (contentLength === "0" || !contentType?.includes("application/json")) {
+    if (!result) {
       // Backend returned success but no JSON body
       console.log("Tab group archived successfully (no response body)");
       return {
@@ -159,22 +142,13 @@ export async function archiveTabGroup(
       };
     }
 
-    const text = await response.text();
-    if (!text || text.trim() === "") {
-      // Empty response body
-      console.log("Tab group archived successfully (empty response body)");
-      return {
-        id: "unknown",
-        secret,
-        salt,
-        browserTabInfos: serverTabInfos,
-        createdAt: Math.floor(Date.now() / 1000),
-      };
-    }
-
-    return JSON.parse(text) as TabGroupResponse;
+    return result;
   } catch (error) {
-    console.error("Error archiving tab group:", error);
+    if (error instanceof HTTPError) {
+      console.error("Failed to archive tab group:", error.response.status, error.message);
+    } else {
+      console.error("Error archiving tab group:", error);
+    }
     return null;
   }
 }
@@ -185,24 +159,14 @@ export async function archiveTabGroup(
  */
 export async function getArchivedTabGroups(): Promise<TabGroupResponse[]> {
   try {
-    const token = await accessTokenStorage.getValue();
-    const response = await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/tab-group`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      console.error("Failed to get archived tab groups", response.statusText);
-      return [];
-    }
-
-    const data: TabGroupResponse[] | unknown = await response.json();
+    const data = await apiClient.get<TabGroupResponse[] | unknown>("tab-group");
     return Array.isArray(data) ? data as TabGroupResponse[] : [];
   } catch (error) {
-    console.error("Error fetching archived tab groups:", error);
+    if (error instanceof HTTPError) {
+      console.error("Failed to get archived tab groups:", error.response.status, error.message);
+    } else {
+      console.error("Error fetching archived tab groups:", error);
+    }
     return [];
   }
 }
@@ -214,24 +178,14 @@ export async function getArchivedTabGroups(): Promise<TabGroupResponse[]> {
  */
 export async function deleteTabGroup(id: string): Promise<boolean> {
   try {
-    const token = await accessTokenStorage.getValue();
-    const response = await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/tab-group`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify({ id }),
-    });
-
-    if (!response.ok) {
-      console.error("Failed to delete tab group", response.statusText);
-      return false;
-    }
-
+    await apiClient.delete("tab-group", { id });
     return true;
   } catch (error) {
-    console.error("Error deleting tab group:", error);
+    if (error instanceof HTTPError) {
+      console.error("Failed to delete tab group:", error.response.status, error.message);
+    } else {
+      console.error("Error deleting tab group:", error);
+    }
     return false;
   }
 }
@@ -243,27 +197,16 @@ export async function deleteTabGroup(id: string): Promise<boolean> {
  */
 export async function generateQRCode(id: string): Promise<string | null> {
   try {
-    const token = await accessTokenStorage.getValue();
-    const response = await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/tab-group/qr-code`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify({ id }),
-    });
-
-    if (!response.ok) {
-      console.error("Failed to generate QR code", response.statusText);
-      return null;
-    }
-
-    const data = await response.json() as QRCodeResponse;
+    const data = await apiClient.post<QRCodeResponse>("tab-group/qr-code", { id });
     // Use web app URL instead of backend URL for sharing
     const webAppUrl = import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173';
     return `${webAppUrl}${data.path}`;
   } catch (error) {
-    console.error("Error generating QR code:", error);
+    if (error instanceof HTTPError) {
+      console.error("Failed to generate QR code:", error.response.status, error.message);
+    } else {
+      console.error("Error generating QR code:", error);
+    }
     return null;
   }
 }

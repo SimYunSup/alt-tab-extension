@@ -16,12 +16,12 @@ export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array) {
   for (let i = 0; i < len; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-  return window.btoa(binary);
+  return btoa(binary);
 }
 
 /** Converts Base64 string to Uint8Array */
 export function base64ToArrayBuffer(base64: string) {
-  const binary_string = window.atob(base64);
+  const binary_string = atob(base64);
   const len = binary_string.length;
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) {

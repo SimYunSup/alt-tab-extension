@@ -4,7 +4,7 @@ import App from './App.tsx';
 import { setupMockAPI } from '@/mocks/setup';
 
 // Enable mock API in development or when VITE_USE_MOCK_API is set
-if (import.meta.env.DEV || import.meta.env.VITE_USE_MOCK_API === 'true') {
+if (import.meta.env.VITE_USE_MOCK_API === 'true') {
   console.log('[Popup] Setting up Mock API...');
   setupMockAPI();
 }
