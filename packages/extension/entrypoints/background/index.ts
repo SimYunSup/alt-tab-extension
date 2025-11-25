@@ -82,25 +82,35 @@ async function restoreTabWithData(tabInfo: RestoredTabInfo): Promise<void> {
 
   // 3. Wait for tab to load and inject storage data
   if (tabInfo.session || tabInfo.local || tabInfo.scrollPosition) {
-    // Wait for tab to complete loading
+    // Wait for tab to complete loading (with shorter timeout)
     const waitForTabLoad = (tabId: number): Promise<void> => {
       return new Promise((resolve) => {
+        let resolved = false;
         const checkTab = async () => {
+          if (resolved) return;
           try {
             const tab = await browser.tabs.get(tabId);
             if (tab.status === 'complete') {
+              resolved = true;
               resolve();
             } else {
-              setTimeout(checkTab, 100);
+              setTimeout(checkTab, 200);
             }
           } catch {
             // Tab might be closed
+            resolved = true;
             resolve();
           }
         };
 
-        // Timeout after 10 seconds
-        setTimeout(() => resolve(), 10000);
+        // Timeout after 5 seconds (reduced from 10)
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            console.log("[Background] Tab load timeout, continuing anyway");
+            resolve();
+          }
+        }, 5000);
         checkTab();
       });
     };

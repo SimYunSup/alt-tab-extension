@@ -42,40 +42,27 @@ export default defineContentScript({
         if (message.type === "restore_tabs" && message.data?.tabs) {
           console.log("[Content Script] Processing restore_tabs request for", message.data.tabs.length, "tabs");
 
-          (async () => {
-            try {
-              // Send message to background script to restore tabs
-              console.log("[Content Script] Sending message to background script...");
-              const response = await browser.runtime.sendMessage({
-                type: "restore_tabs",
-                tabs: message.data.tabs,
-              });
+          const tabCount = message.data.tabs.length;
 
-              console.log("[Content Script] Received response from background:", response);
+          // Send message to background script to restore tabs (fire and forget)
+          console.log("[Content Script] Sending message to background script...");
+          browser.runtime.sendMessage({
+            type: "restore_tabs",
+            tabs: message.data.tabs,
+          }).catch(error => {
+            console.warn("[Content Script] Background message error (tabs may still restore):", error);
+          });
 
-              // Send response back to web app
-              const responseData = {
-                success: true,
-                count: message.data.tabs.length,
-                ...response
-              };
-
-              console.log("[Content Script] Sending response to web app:", responseData);
-
-              window.postMessage({
-                source: "alt-tab-extension",
-                type: "restore_tabs_response",
-                data: responseData,
-              }, "*");
-            } catch (error) {
-              console.error("[Content Script] Failed to restore tabs:", error);
-              window.postMessage({
-                source: "alt-tab-extension",
-                type: "restore_tabs_response",
-                data: { success: false, error: String(error) },
-              }, "*");
-            }
-          })();
+          // Immediately respond to web app - tabs will restore in background
+          console.log("[Content Script] Sending success response to web app");
+          window.postMessage({
+            source: "alt-tab-extension",
+            type: "restore_tabs_response",
+            data: {
+              success: true,
+              count: tabCount,
+            },
+          }, "*");
         }
       });
 
