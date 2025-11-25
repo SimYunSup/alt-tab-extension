@@ -212,7 +212,9 @@ export async function generateQRCode(id: string): Promise<string | null> {
     }
 
     const data = await response.json() as QRCodeResponse;
-    return `${import.meta.env.VITE_OAUTH_BASE_URL}${data.path}`;
+    // Use web app URL instead of backend URL for sharing
+    const webAppUrl = import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173';
+    return `${webAppUrl}${data.path}`;
   } catch (error) {
     console.error("Error generating QR code:", error);
     return null;

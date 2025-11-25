@@ -137,6 +137,12 @@ export default defineBackground(() => {
       tabs = tabs ?? {};
       const currentTabInfo = convertToClientTabInfo(tab);
 
+      // Skip if tab ID is invalid (empty string)
+      if (!currentTabInfo.id) {
+        console.debug("[Background] Tab created with invalid ID, skipping");
+        return;
+      }
+
       tabs[currentTabInfo.id] = currentTabInfo;
       const result = addRefreshInterval(currentTabInfo, setting);
       intervalResult.push([currentTabInfo.id, result]);
@@ -167,7 +173,10 @@ export default defineBackground(() => {
       let tabs = await currentTabStorage.getValue();
       tabs = tabs ?? {};
       const currentTabInfo = convertToClientTabInfo(tab);
+
+      // Skip if tab ID is invalid (empty string)
       if (!currentTabInfo.id) {
+        console.debug("[Background] Tab updated with invalid ID, skipping");
         return;
       }
       tabs[tabId] = currentTabInfo;
@@ -191,7 +200,7 @@ export default defineBackground(() => {
       let tabs = await currentTabStorage.getValue();
       tabs = tabs ?? {};
       const currentTabInfo = tabs[removedTabId];
-      if (currentTabInfo) {
+      if (currentTabInfo && currentTabInfo.id) {
         delete tabs[removedTabId];
         tabs[tabId] = currentTabInfo;
         const setting = await getSetting();
@@ -224,15 +233,19 @@ export default defineBackground(() => {
           const isOutdatedTab = closeRule.idleTimeout > 0 && tabInfo.lastActiveAt < Date.now() - 1000 * 60 * closeRule.idleTimeout;
           try {
             const tab = await browser.tabs.get(Number(tabId));
+            if (!tab || !tab.id) {
+              console.debug("[Background] Tab no longer exists:", tabId);
+              continue;
+            }
             if (isOutdatedTab && await isClosableTab(tab, setting)) {
               await Promise.all([
-                browser.tabs.remove(tab.id!),
+                browser.tabs.remove(tab.id),
                 saveTabIndexedDB(tab, tabInfo)
               ]);
             }
           } catch (error) {
-            console.log("tab is closed", error);
-            return;
+            console.debug("[Background] Tab is closed:", tabId, error);
+            continue;
           }
         }
         const token = await accessTokenStorage.getValue();
@@ -244,7 +257,7 @@ export default defineBackground(() => {
       const tabs = await browser.tabs.query({});
       const setting = await getSetting();
       const clientTabArray = tabs.map((tab) => convertToClientTabInfo(tab))
-        .filter((tab) => !tab.url.includes(import.meta.env.VITE_OAUTH_BASE_URL));
+        .filter((tab) => tab.id && !tab.url.includes(import.meta.env.VITE_OAUTH_BASE_URL)); // Filter out tabs with invalid IDs
       await currentTabStorage.setValue(Object.fromEntries(clientTabArray.map((tab) => [tab.id, tab])));
       if (setting.globalRule.idleCondition === "window") {
         browser.tabs.onActivated.addListener(onActivated);
@@ -262,11 +275,21 @@ export default defineBackground(() => {
         }
         const activeTabs = await browser.tabs.query({ active: true });
         const clientTabs = await currentTabStorage.getValue();
+        if (!clientTabs) {
+          return;
+        }
         for (const activeTab of activeTabs) {
-          const tabInfo = clientTabs?.[String(activeTab.id!)];
+          if (!activeTab.id) {
+            continue;
+          }
+          const tabInfo = clientTabs[String(activeTab.id)];
           if (tabInfo) {
             const currentTabInfo = convertToClientTabInfo(activeTab);
-            clientTabs[activeTab.id!] = currentTabInfo;
+            // Skip if converted tab has invalid ID
+            if (!currentTabInfo.id) {
+              continue;
+            }
+            clientTabs[activeTab.id] = currentTabInfo;
           }
         }
         await currentTabStorage.setValue(clientTabs);
@@ -289,6 +312,11 @@ export default defineBackground(() => {
   }
 
   function addRefreshInterval(tab: ClientTabInfo, setting: Setting) {
+    if (!tab.id) {
+      console.debug("[Background] Cannot add refresh interval - tab has no id");
+      return false;
+    }
+
     if (setting.globalRule.idleCondition === "idle" && (
       import.meta.env.CHROME ||
       import.meta.env.EDGE
@@ -298,7 +326,7 @@ export default defineBackground(() => {
         tabId: Number(tab.id),
         interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
         enabled: setting.globalRule.idleTimeout > 0,
-      }, `content-script@${tab.id ?? 0}`);
+      }, `content-script@${tab.id}`);
       return true;
     } else if (setting.globalRule.idleCondition === "visibility") {
       sendMessage("refresh-interval", {
@@ -306,42 +334,69 @@ export default defineBackground(() => {
         tabId: Number(tab.id),
         interval: setting.refreshInterval ?? DEFAULT_INTERVAL,
         enabled: setting.globalRule.idleTimeout > 0,
-      }, `content-script@${tab.id ?? 0}`);
+      }, `content-script@${tab.id}`);
       return true;
     }
     return false;
   }
   onMessage("refresh-tab", async (message) => {
     const { tabId } = message.data;
-    const tab = await browser.tabs.get(tabId);
-    const clientTabs = await currentTabStorage.getValue();
-    const tabInfo = clientTabs?.[String(tabId)];
-    if (tabInfo) {
-      const currentTabInfo = convertToClientTabInfo(tab);
-      clientTabs[tabId] = currentTabInfo;
+    try {
+      const tab = await browser.tabs.get(tabId);
+      if (!tab || !tab.id) {
+        console.debug("[Background] Tab not found for refresh:", tabId);
+        return;
+      }
+      const clientTabs = await currentTabStorage.getValue();
+      if (!clientTabs) {
+        return;
+      }
+      const tabInfo = clientTabs[String(tabId)];
+      if (tabInfo) {
+        const currentTabInfo = convertToClientTabInfo(tab);
+        clientTabs[tabId] = currentTabInfo;
+      }
+      await currentTabStorage.setValue(clientTabs);
+    } catch (error) {
+      console.debug("[Background] Failed to refresh tab:", tabId, error);
     }
-    await currentTabStorage.setValue(clientTabs);
   });
   onMessage("send-tab-group", async (message) => {
     const { tabIds, secret, salt } = message.data as { tabIds: number[], secret: string, salt: string };
     try {
       console.log("[Background] Received send-tab-group message for tabs:", tabIds);
       if (!secret || !salt) {
-        console.error("Secret and salt are required for tab group archiving");
+        console.error("[Background] Secret and salt are required for tab group archiving");
         return false;
       }
 
       console.log("[Background] Step 1: Getting tab info...");
-      const tabs = await Promise.all(tabIds.map((tabId) => browser.tabs.get(tabId)));
+      const tabs = await Promise.all(
+        tabIds.map(async (tabId) => {
+          try {
+            return await browser.tabs.get(tabId);
+          } catch (error) {
+            console.error(`[Background] Failed to get tab ${tabId}:`, error);
+            return null;
+          }
+        })
+      );
+
+      const validTabs = tabs.filter((tab): tab is Browser.tabs.Tab => tab !== null && tab.id !== undefined);
+      if (validTabs.length === 0) {
+        console.error("[Background] No valid tabs found");
+        return false;
+      }
+
       console.log("[Background] Step 2: Converting to server format...");
-      const tabInfos = await Promise.all(tabs.map((tab) => convertTabInfoServer(tab, convertToClientTabInfo(tab))));
+      const tabInfos = await Promise.all(validTabs.map((tab) => convertTabInfoServer(tab, convertToClientTabInfo(tab))));
       console.log("[Background] Step 3: Archiving tab group...");
 
       const result = await archiveTabGroup(tabInfos, secret, salt);
       console.log("[Background] Step 4: Archive result:", result);
 
       if (result) {
-        console.log("Tab group archived successfully with ID:", result.id);
+        console.log("[Background] Tab group archived successfully with ID:", result.id);
         return true;
       }
 
@@ -350,6 +405,32 @@ export default defineBackground(() => {
       console.error("[Background] Failed to archive tab group:", error);
       return false;
     }
+  });
+
+  // Handle messages from content script (for web app communication)
+  browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    console.log("[Background] Received message from content script:", message);
+
+    if (message.type === "restore_tabs" && message.tabs) {
+      // Restore tabs from shared tab group
+      (async () => {
+        try {
+          for (const tab of message.tabs) {
+            await browser.tabs.create({
+              url: tab.url,
+              active: false,
+            });
+          }
+          sendResponse({ success: true, count: message.tabs.length });
+        } catch (error) {
+          console.error("[Background] Failed to restore tabs:", error);
+          sendResponse({ success: false, error: String(error) });
+        }
+      })();
+      return true; // Keep the message channel open for async response
+    }
+
+    return false;
   });
 
   // Handle external messages from web app (for tab restoration)
@@ -394,8 +475,12 @@ async function onActivated(info: Browser.tabs.OnActivatedInfo) {
   let tab: Browser.tabs.Tab | undefined;
   try {
     tab = await browser.tabs.get(info.tabId);
+    if (!tab || !tab.id) {
+      console.debug("[Background] Tab not found in onActivated:", info.tabId);
+      return;
+    }
   } catch (error) {
-    console.log("Failed to get tab", error);
+    console.debug("[Background] Failed to get tab in onActivated:", info.tabId, error);
     return;
   }
   const settings = await getSetting();
@@ -405,12 +490,27 @@ async function onActivated(info: Browser.tabs.OnActivatedInfo) {
     return;
   }
   const clientTab = convertToClientTabInfo(tab);
+
+  // Skip if converted tab has invalid ID
+  if (!clientTab.id) {
+    console.debug("[Background] Converted tab has invalid ID in onActivated:", info.tabId);
+    return;
+  }
+
   const clientTabs = await currentTabStorage.getValue();
+  if (!clientTabs) {
+    return;
+  }
   clientTabs[String(info.tabId)] = clientTab;
   await currentTabStorage.setValue(clientTabs);
 }
 async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTabInfo): Promise<TabInfo> {
   console.log("[Background] convertTabInfoServer: Getting info for tab", tab.id, tab.url);
+
+  if (!tab.id) {
+    throw new Error("Tab ID is required for conversion");
+  }
+
   let tabInfo;
   try {
     console.log("[Background] convertTabInfoServer: Sending get-tab-info message...");
@@ -419,7 +519,7 @@ async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTab
       setTimeout(() => reject(new Error("Content script timeout")), 3000)
     );
     tabInfo = await Promise.race([
-      sendMessage("get-tab-info", undefined, `content-script@${tab.id ?? 0}`),
+      sendMessage("get-tab-info", undefined, `content-script@${tab.id}`),
       timeoutPromise
     ]);
     console.log("[Background] convertTabInfoServer: Received tab info:", tabInfo);
@@ -437,7 +537,7 @@ async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTab
   console.log("[Background] convertTabInfoServer: Got", cookies.length, "cookies");
 
   return {
-    id: tab.id!.toString(),
+    id: tab.id.toString(),
     title: tab.title ?? urlInstance.hostname,
     windowId: tab.windowId.toString(),
     tabIndex: tab.index,

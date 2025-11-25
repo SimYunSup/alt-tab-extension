@@ -48,8 +48,17 @@ function App() {
 
   // Parse URL to get tab group ID
   useEffect(() => {
+    // Support both query parameter (?id=xxx) and path parameter (/tab-group/xxx)
     const params = new URLSearchParams(window.location.search);
-    const id = params.get("id");
+    let id = params.get("id");
+
+    // If no query parameter, try to extract from path
+    if (!id) {
+      const pathMatch = window.location.pathname.match(/\/tab-group\/([^\/]+)/);
+      if (pathMatch) {
+        id = pathMatch[1];
+      }
+    }
 
     if (!id) {
       setState("no_id");
@@ -87,12 +96,14 @@ function App() {
   // Check if extension is installed
   const checkExtension = () => {
     setState("checking_extension");
+    let responseReceived = false;
 
     // Listen for response from extension content script
     const messageHandler = (event: MessageEvent) => {
       if (event.data?.source !== "alt-tab-extension") return;
 
       if (event.data.type === "pong" && event.data.data?.success) {
+        responseReceived = true;
         setExtensionDetected(true);
         setState("pin_input");
         window.removeEventListener("message", messageHandler);
@@ -112,7 +123,7 @@ function App() {
 
     // Timeout fallback - if no response, extension not installed
     setTimeout(() => {
-      if (state === "checking_extension") {
+      if (!responseReceived) {
         setExtensionDetected(false);
         setState("extension_not_found");
         window.removeEventListener("message", messageHandler);
@@ -312,7 +323,7 @@ function App() {
               <InputOTP
                 maxLength={6}
                 value={pinValue}
-                onChange={(value) => setPinValue(value.replace(/[^0-9]/g, ""))}
+                onChange={(value: string) => setPinValue(value.replace(/[^0-9]/g, ""))}
                 onComplete={handleVerifyPin}
                 pattern="[0-9]*"
                 inputMode="numeric"

@@ -9,7 +9,13 @@ export function Login() {
     browser.identity.launchWebAuthFlow({
       url: `${import.meta.env.VITE_OAUTH_BASE_URL}/oauth/google`,
       interactive: true,
-    }, response => console.log(response));
+    }, (response) => {
+      if (browser.runtime.lastError) {
+        console.log('[Login] OAuth flow error:', browser.runtime.lastError.message);
+        return;
+      }
+      console.log('[Login] OAuth response:', response);
+    });
   }
   return (
     <div className="flex items-center justify-center h-full">

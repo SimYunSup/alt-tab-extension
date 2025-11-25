@@ -16,11 +16,85 @@ function isStorageAvailable(type: 'localStorage' | 'sessionStorage'): boolean {
   }
 }
 
+// Check if current page is the web app
+const webAppUrl = import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173';
+function isWebAppPage() {
+  return window.location.href.startsWith(webAppUrl);
+}
+
 export default defineContentScript({
   matches: ["http://*/*", "https://*/*"],
   // registration: "manifest",
   async main() {
     allowWindowMessaging("background");
+
+    // If this is the web app page, only handle communication, skip storage access
+    if (isWebAppPage()) {
+      console.log("[Content Script] Running on web app page - communication only mode");
+
+      // Handle messages from web app
+      window.addEventListener("message", (event) => {
+        // Only accept messages from same origin
+        if (event.origin !== window.location.origin) return;
+
+        const message = event.data;
+        if (message?.source !== "alt-tab-web") return;
+
+        console.log("[Content Script] Received message from web app:", message.type);
+
+        // Handle ping - respond with pong
+        if (message.type === "ping") {
+          window.postMessage({
+            source: "alt-tab-extension",
+            type: "pong",
+            data: { success: true },
+          }, "*");
+        }
+
+        // Handle restore tabs request
+        if (message.type === "restore_tabs" && message.data?.tabs) {
+          console.log("[Content Script] Processing restore_tabs request for", message.data.tabs.length, "tabs");
+
+          (async () => {
+            try {
+              // Send message to background script to restore tabs
+              console.log("[Content Script] Sending message to background script...");
+              const response = await browser.runtime.sendMessage({
+                type: "restore_tabs",
+                tabs: message.data.tabs,
+              });
+
+              console.log("[Content Script] Received response from background:", response);
+
+              // Send response back to web app
+              const responseData = {
+                success: true,
+                count: message.data.tabs.length,
+                ...response
+              };
+
+              console.log("[Content Script] Sending response to web app:", responseData);
+
+              window.postMessage({
+                source: "alt-tab-extension",
+                type: "restore_tabs_response",
+                data: responseData,
+              }, "*");
+            } catch (error) {
+              console.error("[Content Script] Failed to restore tabs:", error);
+              window.postMessage({
+                source: "alt-tab-extension",
+                type: "restore_tabs_response",
+                data: { success: false, error: String(error) },
+              }, "*");
+            }
+          })();
+        }
+      });
+
+      return;
+    }
+
     onMessage("get-tab-info", () => {
       let storage: { session: string; local: string } = { session: "{}", local: "{}" };
       try {
