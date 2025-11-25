@@ -45,8 +45,7 @@ export default defineConfig({
       },
       externally_connectable: {
         matches: [
-          "http://localhost:*/*",
-          "https://*.alt-tab.app/*",
+          import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173'
           // Add your production domain here
         ],
       },

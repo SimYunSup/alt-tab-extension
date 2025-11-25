@@ -543,6 +543,19 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     console.log("[Background] Received message from content script:", message);
 
+    if (message.type === "open_tab" && message.url) {
+      // Open a new tab with the given URL
+      browser.tabs.create({ url: message.url })
+        .then((tab) => {
+          sendResponse({ success: true, tabId: tab.id });
+        })
+        .catch((error) => {
+          console.error("[Background] Failed to open tab:", error);
+          sendResponse({ success: false, error: String(error) });
+        });
+      return true; // Keep the message channel open for async response
+    }
+
     if (message.type === "restore_tabs" && message.tabs) {
       // Restore tabs from shared tab group with full data restoration
       (async () => {
@@ -585,6 +598,14 @@ export default defineBackground(() => {
         // Return the extension's base URL
         const baseUrl = browser.runtime.getURL("/");
         sendResponse({ success: true, url: baseUrl });
+        return true;
+      }
+
+      if (message.type === "get_redirect_url") {
+        // Return the full redirect URL for internal web page
+        const search = (message as { search?: string }).search || "";
+        const redirectUrl = browser.runtime.getURL("/web/index.html") + search;
+        sendResponse({ success: true, url: redirectUrl });
         return true;
       }
 

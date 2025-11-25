@@ -38,14 +38,15 @@ export default defineContentScript({
           }, "*");
         }
 
-        // Handle get_extension_url - return the extension's base URL
-        if (message.type === "get_extension_url") {
-          const extensionUrl = browser.runtime.getURL("/");
-          console.log("[Content Script] Returning extension URL:", extensionUrl);
+        // Handle get_redirect_url - return the full redirect URL for the internal web page
+        if (message.type === "get_redirect_url") {
+          const search = message.search || "";
+          const redirectUrl = browser.runtime.getURL("/web/index.html") + search;
+          console.log("[Content Script] Returning redirect URL:", redirectUrl);
           window.postMessage({
             source: "alt-tab-extension",
-            type: "extension_url_response",
-            data: { url: extensionUrl },
+            type: "redirect_url_response",
+            data: { url: redirectUrl },
           }, "*");
         }
 
