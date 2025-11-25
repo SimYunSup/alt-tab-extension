@@ -97,7 +97,9 @@ function TabItem({
   };
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       className={cn(
         "w-full flex items-center p-2 rounded-md group transition-all cursor-pointer border-2",
         selected
@@ -105,6 +107,12 @@ function TabItem({
           : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-200",
       )}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -173,7 +181,7 @@ function TabItem({
           </>
         )}
       </div>
-    </button>
+    </div>
   );
 }
 

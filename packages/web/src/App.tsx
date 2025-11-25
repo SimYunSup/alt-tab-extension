@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { verifyPinCode } from "@/lib/crypto";
+import { verifyPinCode, deriveKeyFromPin, decryptSensitiveData } from "@/lib/crypto";
 import {
   Download,
   CheckCircle2,
@@ -15,15 +15,32 @@ import {
 // Backend API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
+interface BrowserTabInfo {
+  url: string;
+  title: string;
+  faviconUrl?: string;
+  scrollPosition?: { x: number; y: number };
+  session?: string;   // Encrypted session storage data
+  cookie?: string;    // Encrypted cookie data
+  local?: string;     // Encrypted local storage data
+}
+
 interface TabGroupData {
   id: string;
   secret: string;
   salt: string;
-  browserTabInfos: Array<{
-    url: string;
-    title: string;
-    faviconUrl?: string;
-  }>;
+  browserTabInfos: BrowserTabInfo[];
+}
+
+// Decrypted tab info for restoration
+interface DecryptedTabInfo {
+  url: string;
+  title: string;
+  faviconUrl?: string;
+  scrollPosition?: { x: number; y: number };
+  session?: string;   // Decrypted session storage data
+  cookie?: string;    // Decrypted cookie data
+  local?: string;     // Decrypted local storage data
 }
 
 type AppState =
@@ -151,7 +168,53 @@ function App() {
         return;
       }
 
-      // PIN is correct, restore tabs
+      // PIN is correct, derive decryption key and decrypt tab data
+      console.log("[Web] PIN verified, deriving decryption key...");
+      const decryptionKey = await deriveKeyFromPin(pinValue, tabGroupData.salt);
+
+      // Decrypt all tab data
+      console.log("[Web] Decrypting tab data for", tabGroupData.browserTabInfos.length, "tabs...");
+      const decryptedTabs: DecryptedTabInfo[] = await Promise.all(
+        tabGroupData.browserTabInfos.map(async (tab) => {
+          const decryptedTab: DecryptedTabInfo = {
+            url: tab.url,
+            title: tab.title,
+            faviconUrl: tab.faviconUrl,
+            scrollPosition: tab.scrollPosition,
+          };
+
+          // Decrypt sensitive data if present
+          if (tab.session) {
+            try {
+              decryptedTab.session = await decryptSensitiveData(tab.session, decryptionKey);
+            } catch (e) {
+              console.warn("[Web] Failed to decrypt session for", tab.url, e);
+              decryptedTab.session = "{}";
+            }
+          }
+          if (tab.cookie) {
+            try {
+              decryptedTab.cookie = await decryptSensitiveData(tab.cookie, decryptionKey);
+            } catch (e) {
+              console.warn("[Web] Failed to decrypt cookies for", tab.url, e);
+              decryptedTab.cookie = "[]";
+            }
+          }
+          if (tab.local) {
+            try {
+              decryptedTab.local = await decryptSensitiveData(tab.local, decryptionKey);
+            } catch (e) {
+              console.warn("[Web] Failed to decrypt local storage for", tab.url, e);
+              decryptedTab.local = "{}";
+            }
+          }
+
+          return decryptedTab;
+        })
+      );
+      console.log("[Web] Decryption complete");
+
+      // Restore tabs with decrypted data
       if (extensionDetected) {
         setState("restoring");
 
@@ -173,13 +236,13 @@ function App() {
 
         window.addEventListener("message", restoreHandler);
 
-        // Send restore request to extension via postMessage
+        // Send restore request to extension via postMessage with decrypted data
         window.postMessage(
           {
             source: "alt-tab-web",
             type: "restore_tabs",
             data: {
-              tabs: tabGroupData.browserTabInfos,
+              tabs: decryptedTabs,
             },
           },
           "*"
@@ -194,10 +257,10 @@ function App() {
           }
         }, 10000);
       } else {
-        // No extension, open tabs directly in browser
+        // No extension, open tabs directly in browser (without cookie/storage restoration)
         setState("restoring");
         let count = 0;
-        for (const tab of tabGroupData.browserTabInfos) {
+        for (const tab of decryptedTabs) {
           window.open(tab.url, "_blank");
           count++;
         }

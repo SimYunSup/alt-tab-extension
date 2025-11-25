@@ -13,6 +13,115 @@ import { archiveTabGroup } from "@/utils/ArchivedTabGroup";
 // Setup mock API in development mode (sync import)
 import { setupMockAPI } from '@/mocks/setup';
 
+/**
+ * Interface for restored tab data (from web app or content script)
+ * Contains encrypted storage data that needs to be decrypted
+ */
+interface RestoredTabInfo {
+  url: string;
+  title?: string;
+  faviconUrl?: string;
+  scrollPosition?: { x: number; y: number };
+  session?: string;   // Encrypted or decrypted session storage data
+  cookie?: string;    // Encrypted or decrypted cookie data (JSON string of cookie array)
+  local?: string;     // Encrypted or decrypted local storage data
+}
+
+/**
+ * Restores a tab with its associated data (cookies, session/local storage, scroll position)
+ */
+async function restoreTabWithData(tabInfo: RestoredTabInfo): Promise<void> {
+  console.log("[Background] Restoring tab:", tabInfo.url);
+
+  // 1. First, restore cookies before opening the tab
+  if (tabInfo.cookie) {
+    try {
+      const cookies = JSON.parse(tabInfo.cookie) as Browser.cookies.SetDetails[];
+      console.log("[Background] Restoring", cookies.length, "cookies for", tabInfo.url);
+
+      for (const cookie of cookies) {
+        try {
+          // Build the cookie URL
+          const protocol = cookie.secure ? 'https://' : 'http://';
+          const domain = cookie.domain?.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+          const cookieUrl = `${protocol}${domain}${cookie.path || '/'}`;
+
+          await browser.cookies.set({
+            url: cookieUrl,
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain,
+            path: cookie.path || '/',
+            secure: cookie.secure || false,
+            httpOnly: cookie.httpOnly || false,
+            sameSite: cookie.sameSite as Browser.cookies.SameSiteStatus || 'lax',
+            expirationDate: cookie.expirationDate,
+          });
+          console.log("[Background] Cookie set:", cookie.name, "for domain:", cookie.domain);
+        } catch (cookieError) {
+          console.warn("[Background] Failed to set cookie:", cookie.name, cookieError);
+        }
+      }
+    } catch (error) {
+      console.error("[Background] Failed to parse cookies:", error);
+    }
+  }
+
+  // 2. Create the tab
+  const newTab = await browser.tabs.create({
+    url: tabInfo.url,
+    active: false,
+  });
+
+  if (!newTab.id) {
+    console.error("[Background] Failed to create tab - no ID returned");
+    return;
+  }
+
+  console.log("[Background] Tab created with ID:", newTab.id);
+
+  // 3. Wait for tab to load and inject storage data
+  if (tabInfo.session || tabInfo.local || tabInfo.scrollPosition) {
+    // Wait for tab to complete loading
+    const waitForTabLoad = (tabId: number): Promise<void> => {
+      return new Promise((resolve) => {
+        const checkTab = async () => {
+          try {
+            const tab = await browser.tabs.get(tabId);
+            if (tab.status === 'complete') {
+              resolve();
+            } else {
+              setTimeout(checkTab, 100);
+            }
+          } catch {
+            // Tab might be closed
+            resolve();
+          }
+        };
+
+        // Timeout after 10 seconds
+        setTimeout(() => resolve(), 10000);
+        checkTab();
+      });
+    };
+
+    await waitForTabLoad(newTab.id);
+
+    // Send storage data to content script for restoration
+    try {
+      console.log("[Background] Sending storage data to content script...");
+      await sendMessage("restore-storage", {
+        session: tabInfo.session || "{}",
+        local: tabInfo.local || "{}",
+        scrollPosition: tabInfo.scrollPosition || { x: 0, y: 0 },
+      }, `content-script@${newTab.id}`);
+      console.log("[Background] Storage restoration message sent to tab:", newTab.id);
+    } catch (error) {
+      console.warn("[Background] Failed to send storage data to content script:", error);
+    }
+  }
+}
+
 // Enable mock API in development or when VITE_USE_MOCK_API is set
 if (import.meta.env.VITE_USE_MOCK_API === 'true') {
   console.log('[Background] Setting up Mock API...');
@@ -23,6 +132,18 @@ const DEFAULT_INTERVAL = 10_000;
 
 export default defineBackground(() => {
   let intervalResult: [string, boolean][] = [];
+
+  // Enable chrome.storage.session access from content scripts
+  // This must be called before any storage access from untrusted contexts
+  if (typeof chrome !== 'undefined' && chrome.storage?.session?.setAccessLevel) {
+    chrome.storage.session.setAccessLevel({
+      accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS'
+    }).then(() => {
+      console.log('[Background] chrome.storage.session access level set to TRUSTED_AND_UNTRUSTED_CONTEXTS');
+    }).catch((error) => {
+      console.warn('[Background] Failed to set storage.session access level:', error);
+    });
+  }
 
   // Inject content script into existing tabs on extension load
   async function injectContentScriptToExistingTabs() {
@@ -412,14 +533,11 @@ export default defineBackground(() => {
     console.log("[Background] Received message from content script:", message);
 
     if (message.type === "restore_tabs" && message.tabs) {
-      // Restore tabs from shared tab group
+      // Restore tabs from shared tab group with full data restoration
       (async () => {
         try {
           for (const tab of message.tabs) {
-            await browser.tabs.create({
-              url: tab.url,
-              active: false,
-            });
+            await restoreTabWithData(tab);
           }
           sendResponse({ success: true, count: message.tabs.length });
         } catch (error) {
@@ -435,7 +553,7 @@ export default defineBackground(() => {
 
   // Handle external messages from web app (for tab restoration)
   browser.runtime.onMessageExternal.addListener(
-    (message: { type: string; tabs?: Array<{ url: string; title?: string }> }, _sender, sendResponse) => {
+    (message: { type: string; tabs?: Array<RestoredTabInfo> }, _sender, sendResponse) => {
       console.log("[Background] Received external message:", message);
 
       if (message.type === "ping") {
@@ -445,14 +563,11 @@ export default defineBackground(() => {
       }
 
       if (message.type === "restore_tabs" && message.tabs) {
-        // Restore tabs from shared tab group
+        // Restore tabs from shared tab group with full data restoration
         (async () => {
           try {
             for (const tab of message.tabs!) {
-              await browser.tabs.create({
-                url: tab.url,
-                active: false,
-              });
+              await restoreTabWithData(tab);
             }
             sendResponse({ success: true, count: message.tabs!.length });
           } catch (error) {
@@ -530,11 +645,48 @@ async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTab
 
   const url = tab.url ?? getDefaultNewTabUrl();
   const urlInstance = new URL(url);
-  console.log("[Background] convertTabInfoServer: Getting cookies for", urlInstance.hostname);
+  console.log("[Background] convertTabInfoServer: Getting cookies for URL:", url);
+
+  // Use URL-based cookie retrieval to get all relevant cookies (including parent domain cookies)
   const cookies = await browser.cookies.getAll({
-    domain: urlInstance.hostname,
+    url: url,
   });
-  console.log("[Background] convertTabInfoServer: Got", cookies.length, "cookies");
+
+  // Also try to get cookies with domain variations
+  const hostname = urlInstance.hostname;
+  const domainParts = hostname.split('.');
+  const additionalCookies: Browser.cookies.Cookie[] = [];
+
+  // Try parent domains (e.g., for sub.example.com, also check .example.com)
+  for (let i = 1; i < domainParts.length - 1; i++) {
+    const parentDomain = '.' + domainParts.slice(i).join('.');
+    try {
+      const parentCookies = await browser.cookies.getAll({
+        domain: parentDomain,
+      });
+      for (const cookie of parentCookies) {
+        // Avoid duplicates
+        if (!cookies.some(c => c.name === cookie.name && c.domain === cookie.domain && c.path === cookie.path)) {
+          additionalCookies.push(cookie);
+        }
+      }
+    } catch (e) {
+      console.debug("[Background] Failed to get cookies for domain:", parentDomain, e);
+    }
+  }
+
+  const allCookies = [...cookies, ...additionalCookies];
+  console.log("[Background] convertTabInfoServer: Got", allCookies.length, "cookies (URL-based:", cookies.length, ", additional:", additionalCookies.length, ")");
+  console.log("[Background] convertTabInfoServer: Cookie details:", allCookies.map(c => ({
+    name: c.name,
+    domain: c.domain,
+    path: c.path,
+    secure: c.secure,
+    httpOnly: c.httpOnly,
+    sameSite: c.sameSite,
+    expirationDate: c.expirationDate,
+    valueLength: c.value?.length ?? 0,
+  })));
 
   return {
     id: tab.id.toString(),
@@ -551,7 +703,7 @@ async function convertTabInfoServer(tab: Browser.tabs.Tab, clientInfo: ClientTab
     storage: {
       session: tabInfo?.storage?.session ?? "{}",
       local: tabInfo?.storage?.local ?? "{}",
-      cookies: cookies ? JSON.stringify(cookies) : "[]",
+      cookies: allCookies ? JSON.stringify(allCookies) : "[]",
     },
   } satisfies TabInfo;
 }

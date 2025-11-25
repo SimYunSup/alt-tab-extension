@@ -3,19 +3,6 @@ import { getURLSetting } from "@/utils/Setting";
 import { settingStorage } from "@/utils/storage";
 import { allowWindowMessaging, onMessage, sendMessage } from "webext-bridge/content-script";
 
-function isStorageAvailable(type: 'localStorage' | 'sessionStorage'): boolean {
-  let storage;
-  try {
-    storage = window[type];
-    const x = '__storage_test__';
-    storage.setItem(x, x);
-    storage.removeItem(x);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
 // Check if current page is the web app
 const webAppUrl = import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173';
 function isWebAppPage() {
@@ -97,21 +84,45 @@ export default defineContentScript({
 
     onMessage("get-tab-info", () => {
       let storage: { session: string; local: string } = { session: "{}", local: "{}" };
+
+      // Safely try to access sessionStorage
       try {
-        if (isStorageAvailable('sessionStorage')) {
-          storage.session = JSON.stringify(Object.entries(sessionStorage));
-        }
-        if (isStorageAvailable('localStorage')) {
-          storage.local = JSON.stringify(Object.entries(localStorage));
+        if (typeof sessionStorage !== 'undefined') {
+          const sessionData: Record<string, string> = {};
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key) {
+              sessionData[key] = sessionStorage.getItem(key) ?? '';
+            }
+          }
+          storage.session = JSON.stringify(sessionData);
         }
       } catch (e) {
-        console.error("Error serializing storage", e);
+        console.warn("[Content Script] Cannot access sessionStorage:", e);
+        storage.session = "{}";
+      }
+
+      // Safely try to access localStorage
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const localData: Record<string, string> = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key) {
+              localData[key] = localStorage.getItem(key) ?? '';
+            }
+          }
+          storage.local = JSON.stringify(localData);
+        }
+      } catch (e) {
+        console.warn("[Content Script] Cannot access localStorage:", e);
+        storage.local = "{}";
       }
 
       const tabInfo = {
         storage: {
-          session: storage.session ?? "{}",
-          local: storage.local ?? "{}",
+          session: storage.session,
+          local: storage.local,
         },
         scrollPosition: {
           x: window.scrollX,
@@ -119,6 +130,54 @@ export default defineContentScript({
         },
       };
       return tabInfo;
+    });
+
+    // Handle storage restoration from background script
+    onMessage("restore-storage", (message) => {
+      const { session, local, scrollPosition } = message.data as {
+        session: string;
+        local: string;
+        scrollPosition: { x: number; y: number };
+      };
+
+      console.log("[Content Script] Restoring storage data...");
+
+      // Restore sessionStorage
+      if (session && session !== "{}") {
+        try {
+          const sessionData = JSON.parse(session) as Record<string, string>;
+          for (const [key, value] of Object.entries(sessionData)) {
+            sessionStorage.setItem(key, value);
+          }
+          console.log("[Content Script] SessionStorage restored:", Object.keys(sessionData).length, "items");
+        } catch (e) {
+          console.warn("[Content Script] Failed to restore sessionStorage:", e);
+        }
+      }
+
+      // Restore localStorage
+      if (local && local !== "{}") {
+        try {
+          const localData = JSON.parse(local) as Record<string, string>;
+          for (const [key, value] of Object.entries(localData)) {
+            localStorage.setItem(key, value);
+          }
+          console.log("[Content Script] LocalStorage restored:", Object.keys(localData).length, "items");
+        } catch (e) {
+          console.warn("[Content Script] Failed to restore localStorage:", e);
+        }
+      }
+
+      // Restore scroll position
+      if (scrollPosition && (scrollPosition.x !== 0 || scrollPosition.y !== 0)) {
+        // Delay scroll to ensure page is fully rendered
+        setTimeout(() => {
+          window.scrollTo(scrollPosition.x, scrollPosition.y);
+          console.log("[Content Script] Scroll position restored:", scrollPosition);
+        }, 500);
+      }
+
+      return { success: true };
     });
     let idleDetector: IdleDetector | null = null;
     let controller = new AbortController();
@@ -134,7 +193,15 @@ export default defineContentScript({
       interval: number;
     }) {
       const url = window.location.href;
-      const settings = await settingStorage.getValue();
+
+      let settings;
+      try {
+        settings = await settingStorage.getValue();
+      } catch (e) {
+        console.warn("[Content Script] Cannot access settings storage:", e);
+        return;
+      }
+
       const closeRule = getURLSetting(settings, url);
       if (!enabled) {
         if (intervalId) {
