@@ -142,3 +142,43 @@ export async function verifyPinCode(pinCode: string, storedSecret: string, store
     return false;
   }
 }
+
+/**
+ * Decrypts sensitive data that was encrypted with encryptSensitiveData
+ * @param encryptedData - Encrypted data in format "iv:ciphertext" (both base64 encoded)
+ * @param secretBase64 - Base64 encoded secret key (32 bytes for AES-256)
+ * @returns Decrypted plain text data
+ */
+export async function decryptSensitiveData(encryptedData: string, secretBase64: string): Promise<string> {
+  try {
+    // Parse iv:ciphertext format
+    const [ivBase64, ciphertextBase64] = encryptedData.split(':');
+    if (!ivBase64 || !ciphertextBase64) {
+      throw new Error("Invalid encrypted data format. Expected 'iv:ciphertext'");
+    }
+
+    const iv = base64ToArrayBuffer(ivBase64);
+    const ciphertext = base64ToArrayBuffer(ciphertextBase64);
+    const secretBytes = base64ToArrayBuffer(secretBase64);
+    const key = await importAesKey(secretBytes);
+
+    const decryptedBytes = await aesGcmDecrypt(ciphertext, key, iv);
+    return uint8ArrayToText(decryptedBytes);
+  } catch (error) {
+    console.error("[E2EE] Failed to decrypt sensitive data:", error);
+    throw new Error("Decryption failed. Invalid PIN or corrupted data.");
+  }
+}
+
+/**
+ * Derives the encryption secret from PIN and salt
+ * This is used when restoring tabs to decrypt sensitive data
+ * @param pinCode - User's 6-digit PIN
+ * @param saltBase64 - Base64 encoded salt (stored with tab group)
+ * @returns Base64 encoded secret for decryption
+ */
+export async function deriveSecretFromPin(pinCode: string, saltBase64: string): Promise<string> {
+  const saltBytes = base64ToArrayBuffer(saltBase64);
+  const secret = await hashPinWithArgon(pinCode, saltBytes);
+  return arrayBufferToBase64(secret);
+}

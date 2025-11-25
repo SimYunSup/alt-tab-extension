@@ -1,5 +1,12 @@
 import { accessTokenStorage } from "./storage";
 import type { TabInfo } from "./Tab";
+import {
+  base64ToArrayBuffer,
+  importAesKey,
+  aesGcmEncrypt,
+  arrayBufferToBase64,
+  textToUint8Array,
+} from "./crypto";
 
 /**
  * Server-compatible tab info structure
@@ -19,17 +26,52 @@ export interface BrowserTabInfoDto {
   };
   lastUsedAgent: string;
   lastActiveAt: number; // epoch seconds
-  session: string;
-  cookie: string;
+  session: string;      // Encrypted with AES-GCM (format: iv:ciphertext in base64)
+  cookie: string;       // Encrypted with AES-GCM (format: iv:ciphertext in base64)
+  local: string;        // Encrypted with AES-GCM (format: iv:ciphertext in base64)
 }
 
 /**
- * Converts client TabInfo to server-compatible format
+ * Encrypts sensitive data using AES-GCM
+ * @param data - Plain text data to encrypt
+ * @param secretBase64 - Base64 encoded secret key (32 bytes for AES-256)
+ * @returns Encrypted data in format "iv:ciphertext" (both base64 encoded)
  */
-function convertToServerTabInfo(tab: TabInfo): BrowserTabInfoDto {
+async function encryptSensitiveData(data: string, secretBase64: string): Promise<string> {
+  try {
+    const secretBytes = base64ToArrayBuffer(secretBase64);
+    const key = await importAesKey(secretBytes);
+    const dataBytes = textToUint8Array(data);
+    const { ciphertext, iv } = await aesGcmEncrypt(dataBytes, key);
+
+    // Format: iv:ciphertext (both base64 encoded)
+    return `${arrayBufferToBase64(iv)}:${arrayBufferToBase64(ciphertext)}`;
+  } catch (error) {
+    console.error("[E2EE] Failed to encrypt sensitive data:", error);
+    throw new Error("Encryption failed");
+  }
+}
+
+/**
+ * Converts client TabInfo to server-compatible format with encrypted sensitive data
+ * @param tab - Client tab info
+ * @param secret - Base64 encoded encryption secret (derived from PIN via Argon2)
+ */
+async function convertToServerTabInfo(tab: TabInfo, secret: string): Promise<BrowserTabInfoDto> {
+  // Encrypt sensitive data (session, cookie, local storage)
+  const sessionData = tab.storage?.session ?? "{}";
+  const cookieData = tab.storage?.cookies ?? "[]";
+  const localData = tab.storage?.local ?? "{}";
+
+  const [encryptedSession, encryptedCookie, encryptedLocal] = await Promise.all([
+    encryptSensitiveData(sessionData, secret),
+    encryptSensitiveData(cookieData, secret),
+    encryptSensitiveData(localData, secret),
+  ]);
+
   return {
     windowId: tab.windowId,
-    groupId: tab.groupId === "-1" ? null : tab.groupId,
+    groupId: tab.groupId === "-1" ? null : tab.groupId ?? null,
     tabIndex: tab.tabIndex,
     title: tab.title,
     url: tab.url,
@@ -41,8 +83,9 @@ function convertToServerTabInfo(tab: TabInfo): BrowserTabInfoDto {
     },
     lastUsedAgent: tab.device,
     lastActiveAt: Math.floor(tab.lastActiveAt / 1000), // Convert ms to seconds
-    session: tab.storage?.session ?? "{}",
-    cookie: tab.storage?.cookies ?? "[]",
+    session: encryptedSession,
+    cookie: encryptedCookie,
+    local: encryptedLocal,
   };
 }
 
@@ -75,8 +118,12 @@ export async function archiveTabGroup(
 ): Promise<TabGroupResponse | null> {
   try {
     const token = await accessTokenStorage.getValue();
-    // Convert client TabInfo to server-compatible format
-    const serverTabInfos = tabs.map(convertToServerTabInfo);
+    // Convert client TabInfo to server-compatible format with encryption
+    console.log("[E2EE] Encrypting sensitive tab data...");
+    const serverTabInfos = await Promise.all(
+      tabs.map((tab) => convertToServerTabInfo(tab, secret))
+    );
+    console.log("[E2EE] Encryption complete for", serverTabInfos.length, "tabs");
 
     const response = await fetch(`${import.meta.env.VITE_OAUTH_BASE_URL}/tab-group`, {
       method: "POST",
@@ -107,7 +154,7 @@ export async function archiveTabGroup(
         id: "unknown",
         secret,
         salt,
-        browserTabInfos: tabs.map(convertToServerTabInfo),
+        browserTabInfos: serverTabInfos,
         createdAt: Math.floor(Date.now() / 1000),
       };
     }
@@ -120,7 +167,7 @@ export async function archiveTabGroup(
         id: "unknown",
         secret,
         salt,
-        browserTabInfos: tabs.map(convertToServerTabInfo),
+        browserTabInfos: serverTabInfos,
         createdAt: Math.floor(Date.now() / 1000),
       };
     }

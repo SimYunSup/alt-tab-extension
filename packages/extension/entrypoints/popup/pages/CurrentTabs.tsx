@@ -450,7 +450,7 @@ export const CurrentTabs = () => {
                 <InputOTP
                   maxLength={6}
                   value={pinValue}
-                  onChange={(value) => setPinValue(value.replace(/[^0-9]/g, ""))}
+                  onChange={(value: string) => setPinValue(value.replace(/[^0-9]/g, ""))}
                   disabled={isArchiving}
                   onComplete={confirmArchive}
                   pattern="[0-9]*"
