@@ -429,13 +429,14 @@ export default defineBackground(() => {
       listClearInterval = () => {
         Promise.all(intervalResult.map(([tabId, isContentScript]) => {
           if (isContentScript) {
-            sendMessage("refresh-interval", {
+            return sendMessage("refresh-interval", {
               type: "idle", // whatever
               tabId: Number(tabId),
               interval: DEFAULT_INTERVAL,
               enabled: false,
             });
           }
+          return undefined;
         }));
         clearInterval(sharedIntervalId);
       };
