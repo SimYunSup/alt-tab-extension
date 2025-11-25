@@ -3,18 +3,24 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  // Base path for extension embedding - files will be served from /web/
-  base: '/web/',
-  build: {
-    // Output to extension's public folder
-    outDir: resolve(__dirname, '../extension/public/web'),
-    emptyOutDir: true,
-  },
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, './src'),
+export default defineConfig(({ mode }) => {
+  const isInternal = mode === 'internal';
+
+  return {
+    plugins: [react(), tailwindcss()],
+    // Base path differs based on mode
+    base: isInternal ? '/web/' : '/',
+    build: {
+      // Output directory differs based on mode
+      outDir: isInternal
+        ? resolve(__dirname, '../extension/public/web')
+        : resolve(__dirname, 'dist'),
+      emptyOutDir: true,
     },
-  },
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, './src'),
+      },
+    },
+  };
 })

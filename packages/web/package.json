@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:internal": "vite --mode internal",
     "build": "tsc && vite build",
+    "build:internal": "tsc && vite build --mode internal",
+    "build:all": "pnpm build && pnpm build:internal",
     "preview": "vite preview"
   },
   "dependencies": {

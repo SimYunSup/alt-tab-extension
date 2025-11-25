@@ -12,12 +12,10 @@ import {
 import { verifyPinCode, deriveKeyFromPin, decryptSensitiveData } from "@/lib/crypto";
 import { QRCodeSVG } from "qrcode.react";
 import {
-  Download,
   CheckCircle2,
   XCircle,
   Loader2,
   Lock,
-  ExternalLink,
   RefreshCw,
   Share2,
   Copy,
@@ -27,21 +25,14 @@ import {
 // Backend API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
-// Check if running inside extension context
-const isExtensionContext = () => {
-  return typeof window !== 'undefined' && 
-    (window.location.protocol === 'chrome-extension:' || 
-     window.location.protocol === 'moz-extension:');
-};
-
 interface BrowserTabInfo {
   url: string;
   title: string;
   faviconUrl?: string;
   scrollPosition?: { x: number; y: number };
-  session?: string;   // Encrypted session storage data
-  cookie?: string;    // Encrypted cookie data
-  local?: string;     // Encrypted local storage data
+  session?: string;
+  cookie?: string;
+  local?: string;
 }
 
 interface TabGroupData {
@@ -51,43 +42,45 @@ interface TabGroupData {
   browserTabInfos: BrowserTabInfo[];
 }
 
-// Decrypted tab info for restoration
 interface DecryptedTabInfo {
   url: string;
   title: string;
   faviconUrl?: string;
   scrollPosition?: { x: number; y: number };
-  session?: string;   // Decrypted session storage data
-  cookie?: string;    // Decrypted cookie data
-  local?: string;     // Decrypted local storage data
+  session?: string;
+  cookie?: string;
+  local?: string;
 }
 
 type AppState =
   | "loading"
   | "no_id"
-  | "checking_extension"
-  | "extension_not_found"
   | "pin_input"
   | "verifying"
   | "restoring"
   | "success"
   | "error";
 
-function App() {
+function InternalApp() {
   const [state, setState] = useState<AppState>("loading");
   const [tabGroupData, setTabGroupData] = useState<TabGroupData | null>(null);
   const [pinValue, setPinValue] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [extensionDetected, setExtensionDetected] = useState(false);
   const [restoredCount, setRestoredCount] = useState(0);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Get current URL for sharing
-  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+  // Get external share URL (for QR code)
+  const getExternalShareUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    const externalBaseUrl = import.meta.env.VITE_EXTERNAL_WEB_URL || "https://alt-tab.app";
+    return id ? `${externalBaseUrl}/?id=${id}` : externalBaseUrl;
+  };
 
-  // Copy URL to clipboard
+  const shareUrl = getExternalShareUrl();
+
   const handleCopyUrl = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
@@ -98,13 +91,10 @@ function App() {
     }
   };
 
-  // Parse URL to get tab group ID
   useEffect(() => {
-    // Support both query parameter (?id=xxx) and path parameter (/tab-group/xxx)
     const params = new URLSearchParams(window.location.search);
     let id = params.get("id");
 
-    // If no query parameter, try to extract from path
     if (!id) {
       const pathMatch = window.location.pathname.match(/\/tab-group\/([^\/]+)/);
       if (pathMatch) {
@@ -120,7 +110,6 @@ function App() {
     fetchTabGroupData(id);
   }, []);
 
-  // Fetch tab group data from server
   const fetchTabGroupData = async (id: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/tab-group/${id}`);
@@ -137,7 +126,7 @@ function App() {
 
       const data = await response.json() as TabGroupData;
       setTabGroupData(data);
-      checkExtension();
+      setState("pin_input");
     } catch (error) {
       console.error("Failed to fetch tab group:", error);
       setErrorMessage("서버에 연결할 수 없습니다.");
@@ -145,53 +134,6 @@ function App() {
     }
   };
 
-  // Check if extension is installed
-  const checkExtension = () => {
-    // If running inside extension context, extension is always available
-    if (isExtensionContext()) {
-      console.log("[Web] Running inside extension context, skipping extension check");
-      setExtensionDetected(true);
-      setState("pin_input");
-      return;
-    }
-
-    setState("checking_extension");
-    let responseReceived = false;
-
-    // Listen for response from extension content script
-    const messageHandler = (event: MessageEvent) => {
-      if (event.data?.source !== "alt-tab-extension") return;
-
-      if (event.data.type === "pong" && event.data.data?.success) {
-        responseReceived = true;
-        setExtensionDetected(true);
-        setState("pin_input");
-        window.removeEventListener("message", messageHandler);
-      }
-    };
-
-    window.addEventListener("message", messageHandler);
-
-    // Send ping to extension via postMessage (handled by content script)
-    window.postMessage(
-      {
-        source: "alt-tab-web",
-        type: "ping",
-      },
-      "*"
-    );
-
-    // Timeout fallback - if no response, extension not installed
-    setTimeout(() => {
-      if (!responseReceived) {
-        setExtensionDetected(false);
-        setState("extension_not_found");
-        window.removeEventListener("message", messageHandler);
-      }
-    }, 2000);
-  };
-
-  // Verify PIN and restore tabs
   const handleVerifyPin = async () => {
     if (pinValue.length !== 6 || !tabGroupData) {
       setPinError("6자리 PIN 코드를 입력해주세요.");
@@ -211,12 +153,10 @@ function App() {
         return;
       }
 
-      // PIN is correct, derive decryption key and decrypt tab data
-      console.log("[Web] PIN verified, deriving decryption key...");
+      console.log("[Internal] PIN verified, deriving decryption key...");
       const decryptionKey = await deriveKeyFromPin(pinValue, tabGroupData.salt);
 
-      // Decrypt all tab data
-      console.log("[Web] Decrypting tab data for", tabGroupData.browserTabInfos.length, "tabs...");
+      console.log("[Internal] Decrypting tab data for", tabGroupData.browserTabInfos.length, "tabs...");
       const decryptedTabs: DecryptedTabInfo[] = await Promise.all(
         tabGroupData.browserTabInfos.map(async (tab) => {
           const decryptedTab: DecryptedTabInfo = {
@@ -226,12 +166,11 @@ function App() {
             scrollPosition: tab.scrollPosition,
           };
 
-          // Decrypt sensitive data if present
           if (tab.session) {
             try {
               decryptedTab.session = await decryptSensitiveData(tab.session, decryptionKey);
             } catch (e) {
-              console.warn("[Web] Failed to decrypt session for", tab.url, e);
+              console.warn("[Internal] Failed to decrypt session for", tab.url, e);
               decryptedTab.session = "{}";
             }
           }
@@ -239,7 +178,7 @@ function App() {
             try {
               decryptedTab.cookie = await decryptSensitiveData(tab.cookie, decryptionKey);
             } catch (e) {
-              console.warn("[Web] Failed to decrypt cookies for", tab.url, e);
+              console.warn("[Internal] Failed to decrypt cookies for", tab.url, e);
               decryptedTab.cookie = "[]";
             }
           }
@@ -247,7 +186,7 @@ function App() {
             try {
               decryptedTab.local = await decryptSensitiveData(tab.local, decryptionKey);
             } catch (e) {
-              console.warn("[Web] Failed to decrypt local storage for", tab.url, e);
+              console.warn("[Internal] Failed to decrypt local storage for", tab.url, e);
               decryptedTab.local = "{}";
             }
           }
@@ -255,98 +194,42 @@ function App() {
           return decryptedTab;
         })
       );
-      console.log("[Web] Decryption complete");
+      console.log("[Internal] Decryption complete");
 
-      // Restore tabs with decrypted data
-      if (extensionDetected) {
-        setState("restoring");
+      // Restore tabs using chrome.runtime API
+      setState("restoring");
 
-        // If running inside extension context, use chrome.runtime API directly
-        if (isExtensionContext()) {
-          try {
-            // Use chrome.runtime.sendMessage to communicate with background script
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const windowAny = window as any;
-            const runtime = windowAny.chrome?.runtime || windowAny.browser?.runtime;
-            
-            if (runtime?.sendMessage) {
-              runtime.sendMessage(
-                { type: "restore_tabs", tabs: decryptedTabs },
-                (response: { success?: boolean; count?: number; error?: string }) => {
-                  if (response?.success) {
-                    setRestoredCount(response.count || tabGroupData.browserTabInfos.length);
-                    setState("success");
-                  } else {
-                    setErrorMessage("탭 복원에 실패했습니다: " + (response?.error || "알 수 없는 오류"));
-                    setState("error");
-                  }
-                }
-              );
-            } else {
-              throw new Error("Runtime API not available");
-            }
-          } catch (error) {
-            console.error("[Web] Failed to restore tabs via runtime API:", error);
-            setErrorMessage("탭 복원에 실패했습니다.");
-            setState("error");
-          }
-        } else {
-          // Running in external web page, use postMessage to content script
-          const restoreHandler = (event: MessageEvent) => {
-            if (event.data?.source !== "alt-tab-extension") return;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const windowAny = window as any;
+        const runtime = windowAny.chrome?.runtime || windowAny.browser?.runtime;
 
-            if (event.data.type === "restore_tabs_response") {
-              if (event.data.data?.success) {
-                setRestoredCount(event.data.data.count || tabGroupData.browserTabInfos.length);
+        if (runtime?.sendMessage) {
+          runtime.sendMessage(
+            { type: "restore_tabs", tabs: decryptedTabs },
+            (response: { success?: boolean; count?: number; error?: string }) => {
+              if (response?.success) {
+                setRestoredCount(response.count || tabGroupData.browserTabInfos.length);
                 setState("success");
               } else {
-                setErrorMessage("탭 복원에 실패했습니다.");
+                setErrorMessage("탭 복원에 실패했습니다: " + (response?.error || "알 수 없는 오류"));
                 setState("error");
               }
-              window.removeEventListener("message", restoreHandler);
             }
-          };
-
-          window.addEventListener("message", restoreHandler);
-
-          // Send restore request to extension via postMessage with decrypted data
-          window.postMessage(
-            {
-              source: "alt-tab-web",
-              type: "restore_tabs",
-              data: {
-                tabs: decryptedTabs,
-              },
-            },
-            "*"
           );
-
-          // Simple timeout fallback (5 seconds - response should be immediate now)
-          setTimeout(() => {
-            window.removeEventListener("message", restoreHandler);
-          }, 5000);
+        } else {
+          throw new Error("Runtime API not available");
         }
-      } else {
-        // No extension, open tabs directly in browser (without cookie/storage restoration)
-        setState("restoring");
-        let count = 0;
-        for (const tab of decryptedTabs) {
-          window.open(tab.url, "_blank");
-          count++;
-        }
-        setRestoredCount(count);
-        setState("success");
+      } catch (error) {
+        console.error("[Internal] Failed to restore tabs:", error);
+        setErrorMessage("탭 복원에 실패했습니다.");
+        setState("error");
       }
     } catch (error) {
       console.error("PIN verification error:", error);
       setPinError("오류가 발생했습니다. 다시 시도해주세요.");
       setState("pin_input");
     }
-  };
-
-  // Continue without extension (open tabs directly)
-  const handleContinueWithoutExtension = () => {
-    setState("pin_input");
   };
 
   const renderContent = () => {
@@ -367,65 +250,6 @@ function App() {
             <p className="text-muted-foreground">
               공유 링크가 올바르지 않습니다. QR 코드를 다시 스캔해주세요.
             </p>
-          </div>
-        );
-
-      case "checking_extension":
-        return (
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="text-muted-foreground">확장프로그램 확인 중...</p>
-          </div>
-        );
-
-      case "extension_not_found":
-        return (
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="p-4 bg-accent/20 rounded-full">
-              <Download className="h-12 w-12 text-accent" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">
-                확장프로그램 설치 필요
-              </h2>
-              <p className="text-muted-foreground mb-4">
-                탭을 복원하려면 Alt-Tab 확장프로그램이 필요합니다.
-                <br />
-                설치 후 이 페이지를 새로고침해주세요.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 w-full max-w-xs">
-              <Button
-                className="w-full bg-primary hover:bg-primary/90"
-                onClick={() => window.open("https://chrome.google.com/webstore/detail/alt-tab", "_blank")}
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Chrome 웹 스토어에서 설치
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => window.location.reload()}
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                설치 후 새로고침
-              </Button>
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">또는</span>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                className="w-full text-muted-foreground"
-                onClick={handleContinueWithoutExtension}
-              >
-                확장프로그램 없이 계속하기
-              </Button>
-            </div>
           </div>
         );
 
@@ -628,4 +452,4 @@ function App() {
   );
 }
 
-export default App;
+export default InternalApp;

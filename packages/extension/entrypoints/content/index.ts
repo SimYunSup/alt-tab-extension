@@ -38,6 +38,17 @@ export default defineContentScript({
           }, "*");
         }
 
+        // Handle get_extension_url - return the extension's base URL
+        if (message.type === "get_extension_url") {
+          const extensionUrl = browser.runtime.getURL("/");
+          console.log("[Content Script] Returning extension URL:", extensionUrl);
+          window.postMessage({
+            source: "alt-tab-extension",
+            type: "extension_url_response",
+            data: { url: extensionUrl },
+          }, "*");
+        }
+
         // Handle restore tabs request
         if (message.type === "restore_tabs" && message.data?.tabs) {
           console.log("[Content Script] Processing restore_tabs request for", message.data.tabs.length, "tabs");
