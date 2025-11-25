@@ -50,6 +50,12 @@ export default defineConfig({
           // Add your production domain here
         ],
       },
+      web_accessible_resources: [
+        {
+          resources: ["web/*"],
+          matches: ["<all_urls>"],
+        },
+      ],
     };
     if (mode === "development") {
       if (browser === "chrome" || browser === "edge") {

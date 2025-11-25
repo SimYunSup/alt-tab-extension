@@ -129,11 +129,11 @@ export function RecordTabs() {
                       <div className="text-sm font-medium text-slate-900 truncate">{tab.title}</div>
                       <div className="flex items-center">
                         <span className="text-xs text-slate-500 truncate">{tab.url}</span>
-                        <ExternalLink className="h-3 w-3 text-slate-400 ml-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ExternalLink className="h-3 w-3 text-slate-400 ml-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <div className="flex flex-col items-end gap-1 shrink-0">
                       <div className="flex items-center gap-1">
                         <Clock className="h-3 w-3 text-slate-400" />
                         <span className="text-xs text-slate-500">{formatTimeAgo(tab.lastActiveAt)}</span>

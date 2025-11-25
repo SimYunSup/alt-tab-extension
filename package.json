@@ -8,12 +8,13 @@
     "dev": "pnpm --filter @alt-tab/extension dev",
     "dev:firefox": "pnpm --filter @alt-tab/extension dev:firefox",
     "dev:web": "pnpm --filter @alt-tab/web dev",
-    "build": "pnpm --filter @alt-tab/extension build",
-    "build:firefox": "pnpm --filter @alt-tab/extension build:firefox",
+    "build": "pnpm --filter @alt-tab/web build && pnpm --filter @alt-tab/extension build",
+    "build:firefox": "pnpm --filter @alt-tab/web build && pnpm --filter @alt-tab/extension build:firefox",
     "build:web": "pnpm --filter @alt-tab/web build",
-    "build:all": "pnpm -r build",
-    "zip": "pnpm --filter @alt-tab/extension zip",
-    "zip:firefox": "pnpm --filter @alt-tab/extension zip:firefox",
+    "build:extension": "pnpm --filter @alt-tab/extension build",
+    "build:all": "pnpm --filter @alt-tab/web build && pnpm -r build",
+    "zip": "pnpm --filter @alt-tab/web build && pnpm --filter @alt-tab/extension zip",
+    "zip:firefox": "pnpm --filter @alt-tab/web build && pnpm --filter @alt-tab/extension zip:firefox",
     "test": "pnpm --filter @alt-tab/extension test"
   },
   "packageManager": "pnpm@10.22.0"

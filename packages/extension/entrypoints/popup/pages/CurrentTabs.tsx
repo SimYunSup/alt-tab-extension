@@ -140,13 +140,13 @@ function TabItem({
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-sm font-medium text-slate-900 truncate text-start">{tab.title || "제목 없음"}</span>
           {tab.isPinned && (
-            <Pin className="size-3 text-blue-500 flex-shrink-0" />
+            <Pin className="size-3 text-blue-500 shrink-0" />
           )}
           {tab.isAudible && (
-            <Volume2 className="size-3 text-green-500 flex-shrink-0" />
+            <Volume2 className="size-3 text-green-500 shrink-0" />
           )}
           {tab.groupId !== "-1" && (
-            <Layers className="size-3 text-purple-500 flex-shrink-0" />
+            <Layers className="size-3 text-purple-500 shrink-0" />
           )}
         </div>
         <div className="flex items-center">
@@ -154,7 +154,7 @@ function TabItem({
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 flex-shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0">
         {isHovered && !selected ? (
           <Button
             variant="ghost"

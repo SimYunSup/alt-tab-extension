@@ -9,6 +9,7 @@ import { useToken } from "@/entrypoints/popup/hooks/useStorageValue";
 import { cn } from "@/utils";
 import { FolderOpen, QrCode, Trash } from "lucide-react";
 import { getArchivedTabGroups, deleteTabGroup, generateQRCode, type TabGroupResponse } from "@/utils/ArchivedTabGroup";
+import { getWebAppUrl } from "@/utils/web";
 export function ArchiveTabs() {
   const [token] = useToken();
 
@@ -76,10 +77,14 @@ export function ArchiveTabs() {
         return;
       }
 
-      // Open the web app in a new tab with the share URL
-      // The web app will display the QR code and provide sharing options
+      // Extract the tab group ID from the share URL
+      const url = new URL(shareUrl);
+      const tabGroupId = url.searchParams.get('id') || url.pathname.split('/').pop();
+
+      // Open the embedded web app with the tab group ID
+      const webAppUrl = getWebAppUrl(`?id=${tabGroupId}`);
       await browser.tabs.create({
-        url: shareUrl,
+        url: webAppUrl,
         active: true,
       });
     } catch (error) {

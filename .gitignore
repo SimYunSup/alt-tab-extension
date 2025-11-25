@@ -13,6 +13,9 @@ stats.html
 stats-*.json
 .wxt
 
+# Built web app assets (copied to extension)
+packages/extension/public/web
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

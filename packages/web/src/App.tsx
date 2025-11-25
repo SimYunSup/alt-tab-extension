@@ -27,6 +27,13 @@ import {
 // Backend API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
+// Check if running inside extension context
+const isExtensionContext = () => {
+  return typeof window !== 'undefined' && 
+    (window.location.protocol === 'chrome-extension:' || 
+     window.location.protocol === 'moz-extension:');
+};
+
 interface BrowserTabInfo {
   url: string;
   title: string;
@@ -140,6 +147,14 @@ function App() {
 
   // Check if extension is installed
   const checkExtension = () => {
+    // If running inside extension context, extension is always available
+    if (isExtensionContext()) {
+      console.log("[Web] Running inside extension context, skipping extension check");
+      setExtensionDetected(true);
+      setState("pin_input");
+      return;
+    }
+
     setState("checking_extension");
     let responseReceived = false;
 
@@ -246,40 +261,71 @@ function App() {
       if (extensionDetected) {
         setState("restoring");
 
-        // Listen for response from extension
-        const restoreHandler = (event: MessageEvent) => {
-          if (event.data?.source !== "alt-tab-extension") return;
-
-          if (event.data.type === "restore_tabs_response") {
-            if (event.data.data?.success) {
-              setRestoredCount(event.data.data.count || tabGroupData.browserTabInfos.length);
-              setState("success");
+        // If running inside extension context, use chrome.runtime API directly
+        if (isExtensionContext()) {
+          try {
+            // Use chrome.runtime.sendMessage to communicate with background script
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const windowAny = window as any;
+            const runtime = windowAny.chrome?.runtime || windowAny.browser?.runtime;
+            
+            if (runtime?.sendMessage) {
+              runtime.sendMessage(
+                { type: "restore_tabs", tabs: decryptedTabs },
+                (response: { success?: boolean; count?: number; error?: string }) => {
+                  if (response?.success) {
+                    setRestoredCount(response.count || tabGroupData.browserTabInfos.length);
+                    setState("success");
+                  } else {
+                    setErrorMessage("탭 복원에 실패했습니다: " + (response?.error || "알 수 없는 오류"));
+                    setState("error");
+                  }
+                }
+              );
             } else {
-              setErrorMessage("탭 복원에 실패했습니다.");
-              setState("error");
+              throw new Error("Runtime API not available");
             }
-            window.removeEventListener("message", restoreHandler);
+          } catch (error) {
+            console.error("[Web] Failed to restore tabs via runtime API:", error);
+            setErrorMessage("탭 복원에 실패했습니다.");
+            setState("error");
           }
-        };
+        } else {
+          // Running in external web page, use postMessage to content script
+          const restoreHandler = (event: MessageEvent) => {
+            if (event.data?.source !== "alt-tab-extension") return;
 
-        window.addEventListener("message", restoreHandler);
+            if (event.data.type === "restore_tabs_response") {
+              if (event.data.data?.success) {
+                setRestoredCount(event.data.data.count || tabGroupData.browserTabInfos.length);
+                setState("success");
+              } else {
+                setErrorMessage("탭 복원에 실패했습니다.");
+                setState("error");
+              }
+              window.removeEventListener("message", restoreHandler);
+            }
+          };
 
-        // Send restore request to extension via postMessage with decrypted data
-        window.postMessage(
-          {
-            source: "alt-tab-web",
-            type: "restore_tabs",
-            data: {
-              tabs: decryptedTabs,
+          window.addEventListener("message", restoreHandler);
+
+          // Send restore request to extension via postMessage with decrypted data
+          window.postMessage(
+            {
+              source: "alt-tab-web",
+              type: "restore_tabs",
+              data: {
+                tabs: decryptedTabs,
+              },
             },
-          },
-          "*"
-        );
+            "*"
+          );
 
-        // Simple timeout fallback (5 seconds - response should be immediate now)
-        setTimeout(() => {
-          window.removeEventListener("message", restoreHandler);
-        }, 5000);
+          // Simple timeout fallback (5 seconds - response should be immediate now)
+          setTimeout(() => {
+            window.removeEventListener("message", restoreHandler);
+          }, 5000);
+        }
       } else {
         // No extension, open tabs directly in browser (without cookie/storage restoration)
         setState("restoring");

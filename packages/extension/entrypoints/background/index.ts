@@ -573,6 +573,30 @@ export default defineBackground(() => {
         return true;
       }
 
+      if (message.type === "open_settings") {
+        // Open extension settings page
+        const settingsUrl = browser.runtime.getURL("/popup.html") + "#/page/settings";
+        browser.tabs.create({ url: settingsUrl });
+        sendResponse({ success: true, url: settingsUrl });
+        return true;
+      }
+
+      if (message.type === "get_extension_url") {
+        // Return the extension's base URL
+        const baseUrl = browser.runtime.getURL("/");
+        sendResponse({ success: true, url: baseUrl });
+        return true;
+      }
+
+      if (message.type === "open_web") {
+        // Open embedded web app page
+        const path = (message as { path?: string }).path || "";
+        const webUrl = browser.runtime.getURL("/web/index.html") + path;
+        browser.tabs.create({ url: webUrl });
+        sendResponse({ success: true, url: webUrl });
+        return true;
+      }
+
       if (message.type === "restore_tabs" && message.tabs) {
         // Restore tabs from shared tab group with full data restoration
         (async () => {
