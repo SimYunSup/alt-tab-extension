@@ -2,6 +2,12 @@ import { browser, defineContentScript } from "#imports";
 import { getURLSetting } from "@/utils/Setting";
 import { settingStorage } from "@/utils/storage";
 import { allowWindowMessaging, onMessage, sendMessage } from "webext-bridge/content-script";
+import {
+  BRIDGE_MESSAGES,
+  RUNTIME_MESSAGES,
+  WINDOW_MESSAGES,
+  MESSAGE_SOURCES,
+} from "@/utils/message-types";
 
 // Check if current page is the web app
 const webAppUrl = import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173';
@@ -24,33 +30,33 @@ export default defineContentScript({
         if (event.origin !== window.location.origin) return;
 
         const message = event.data;
-        if (message?.source !== "alt-tab-web") return;
+        if (message?.source !== MESSAGE_SOURCES.WEB_APP) return;
 
         console.log("[Content Script] Received message from web app:", message.type);
 
         // Handle ping - respond with pong
-        if (message.type === "ping") {
+        if (message.type === WINDOW_MESSAGES.PING) {
           window.postMessage({
-            source: "alt-tab-extension",
-            type: "pong",
+            source: MESSAGE_SOURCES.EXTENSION,
+            type: WINDOW_MESSAGES.PONG,
             data: { success: true },
           }, "*");
         }
 
         // Handle get_redirect_url - return the full redirect URL for the internal web page
-        if (message.type === "get_redirect_url") {
+        if (message.type === WINDOW_MESSAGES.GET_REDIRECT_URL) {
           const search = message.search || "";
           const redirectUrl = browser.runtime.getURL("/web/index.html") + search;
           console.log("[Content Script] Returning redirect URL:", redirectUrl);
           window.postMessage({
-            source: "alt-tab-extension",
-            type: "redirect_url_response",
+            source: MESSAGE_SOURCES.EXTENSION,
+            type: WINDOW_MESSAGES.REDIRECT_URL_RESPONSE,
             data: { url: redirectUrl },
           }, "*");
         }
 
         // Handle restore tabs request
-        if (message.type === "restore_tabs" && message.data?.tabs) {
+        if (message.type === WINDOW_MESSAGES.RESTORE_TABS && message.data?.tabs) {
           console.log("[Content Script] Processing restore_tabs request for", message.data.tabs.length, "tabs");
 
           const tabCount = message.data.tabs.length;
@@ -58,7 +64,7 @@ export default defineContentScript({
           // Send message to background script to restore tabs (fire and forget)
           console.log("[Content Script] Sending message to background script...");
           browser.runtime.sendMessage({
-            type: "restore_tabs",
+            type: RUNTIME_MESSAGES.RESTORE_TABS,
             tabs: message.data.tabs,
           }).catch(error => {
             console.warn("[Content Script] Background message error (tabs may still restore):", error);
@@ -67,8 +73,8 @@ export default defineContentScript({
           // Immediately respond to web app - tabs will restore in background
           console.log("[Content Script] Sending success response to web app");
           window.postMessage({
-            source: "alt-tab-extension",
-            type: "restore_tabs_response",
+            source: MESSAGE_SOURCES.EXTENSION,
+            type: WINDOW_MESSAGES.RESTORE_TABS_RESPONSE,
             data: {
               success: true,
               count: tabCount,
@@ -80,7 +86,7 @@ export default defineContentScript({
       return;
     }
 
-    onMessage("get-tab-info", () => {
+    onMessage(BRIDGE_MESSAGES.GET_TAB_INFO, () => {
       let storage: { session: string; local: string } = { session: "{}", local: "{}" };
 
       // Safely try to access sessionStorage
@@ -131,7 +137,7 @@ export default defineContentScript({
     });
 
     // Handle storage restoration from background script
-    onMessage("restore-storage", (message) => {
+    onMessage(BRIDGE_MESSAGES.RESTORE_STORAGE, (message) => {
       const { session, local, scrollPosition } = message.data as {
         session: string;
         local: string;
@@ -224,7 +230,7 @@ export default defineContentScript({
         idleDetector = new IdleDetector();
         idleDetector.addEventListener("change", () => {
           if (idleDetector?.userState === "idle") {
-            sendMessage("refresh-tab", { tabId }, "background");
+            sendMessage(BRIDGE_MESSAGES.REFRESH_TAB, { tabId }, "background");
           }
         });
         await idleDetector.start({
@@ -234,18 +240,18 @@ export default defineContentScript({
       } else if (closeRule.idleCondition === "visibility") {
         setInterval(() => {
           if (!document.hidden) {
-            sendMessage("refresh-tab", { tabId }, "background");
+            sendMessage(BRIDGE_MESSAGES.REFRESH_TAB, { tabId }, "background");
           }
         }, interval);
         function onVisibilityChange() {
           if (document.hidden) {
-            sendMessage("refresh-tab", { tabId }, "background");
+            sendMessage(BRIDGE_MESSAGES.REFRESH_TAB, { tabId }, "background");
           }
         }
         document.addEventListener("visibilitychange", onVisibilityChange, { signal: controller.signal });
       }
     }
-    onMessage("refresh-interval", async (message) => {
+    onMessage(BRIDGE_MESSAGES.REFRESH_INTERVAL, async (message) => {
       const { tabId, interval, enabled } = message.data;
       await runRefreshInterval({
         tabId: tabId,
