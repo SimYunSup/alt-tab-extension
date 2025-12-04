@@ -1,5 +1,7 @@
 # E2EE (End-to-End Encryption) 아키텍처 설계
 
+[메인 README (한국어)](../README.ko.md) | [Main README (English)](../README.md)
+
 ## 목차
 1. [개요](#개요)
 2. [보안 요구사항](#보안-요구사항)
