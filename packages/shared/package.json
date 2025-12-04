@@ -1,0 +1,24 @@
+{
+  "name": "@alt-tab/shared",
+  "version": "0.0.1",
+  "description": "Shared utilities for Alt-Tab extension and web app",
+  "type": "module",
+  "exports": {
+    "./crypto/constants": "./src/crypto/constants.ts",
+    "./crypto/encoding": "./src/crypto/encoding.ts",
+    "./crypto/aes": "./src/crypto/aes.ts",
+    "./crypto/pin": "./src/crypto/pin.ts",
+    "./crypto/sensitive-data": "./src/crypto/sensitive-data.ts",
+    "./logger": "./src/logger.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "consola": "^3.4.2",
+    "hash-wasm": "^4.11.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
