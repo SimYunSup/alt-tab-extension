@@ -58,7 +58,7 @@ export default defineConfig({
     };
     if (mode === "development") {
       if (browser === "chrome" || browser === "edge") {
-        (manifest as any).key = import.meta.env.VITE_MANIFEST_DEV_KEY;
+        (manifest as { key?: string }).key = import.meta.env.VITE_MANIFEST_DEV_KEY;
       }
     }
     if (browser === "firefox") {

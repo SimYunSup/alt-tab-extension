@@ -4,6 +4,24 @@ import type { Setting } from "@/types/data";
 import { browser } from "wxt/browser";
 import { db } from "./db";
 
+// Firefox-specific types
+interface ContextualIdentity {
+  cookieStoreId: string;
+  name: string;
+  color: string;
+  icon: string;
+}
+
+type FirefoxBrowser = typeof browser & {
+  contextualIdentities: {
+    get(cookieStoreId: string): Promise<ContextualIdentity>;
+  };
+};
+
+type FirefoxTab = Browser.tabs.Tab & {
+  cookieStoreId?: string;
+};
+
 export const TAB_KEY = "tab";
 export const RECORD_TAB_KEY = "tab-record";
 
@@ -26,6 +44,7 @@ export async function isClosableTab(tab: Browser.tabs.Tab, setting: Setting) {
   if (closeRules.allowPinnedTab && tab.pinned) {
     return false;
   }
+  // When ignoreAudibleTab is false (default), protect audible tabs from closing
   if (!closeRules.ignoreAudibleTab && tab.audible) {
     return false;
   }
@@ -34,13 +53,14 @@ export async function isClosableTab(tab: Browser.tabs.Tab, setting: Setting) {
       return false;
     }
     if (import.meta.env.FIREFOX) {
-      try {
-        const contextualId = await (browser as any).contextualIdentities.get(
-          (tab as any).cookieStoreId
-        );
-        return false;
-      } catch {
-        return true;
+      const firefoxTab = tab as FirefoxTab;
+      if (firefoxTab.cookieStoreId) {
+        try {
+          await (browser as FirefoxBrowser).contextualIdentities.get(firefoxTab.cookieStoreId);
+          return false;
+        } catch {
+          return true;
+        }
       }
     }
   }
