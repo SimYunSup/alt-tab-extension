@@ -44,7 +44,7 @@ function normalizeTabs(tabs: Record<string, ClientTabInfo>) {
     if (!acc[windowId]) {
       acc[windowId] = [];
     }
-    acc[windowId][tab.tabIndex] = tab;
+    acc[windowId].push(tab);
     return acc;
   }, {} as Record<string, ClientTabInfo[]>);
   return tabWindows;
