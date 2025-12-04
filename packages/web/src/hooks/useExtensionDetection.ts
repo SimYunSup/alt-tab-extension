@@ -48,7 +48,7 @@ export function useExtensionDetection(): UseExtensionDetectionResult {
 
   const checkExtension = useCallback(async () => {
     setState('checking');
-    
+
     const extensionId = getExtensionId();
     const runtime = getRuntime();
 

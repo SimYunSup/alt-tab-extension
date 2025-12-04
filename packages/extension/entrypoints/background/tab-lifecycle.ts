@@ -191,6 +191,9 @@ export function setupTabEventListeners(
   browser.tabs.onRemoved.addListener(async (tabId) => {
     if (!tabId) return;
 
+    const newResult = intervalResult.filter(([id]) => id !== String(tabId));
+    updateIntervalResult(newResult);
+
     let tabs = await currentTabStorage.getValue() ?? {};
     if (tabs[tabId]) {
       delete tabs[tabId];
@@ -296,6 +299,7 @@ export async function initializeTabs(
 
   // Return cleanup function
   return () => {
+    browser.tabs.onActivated.removeListener(onTabActivated);
     clearInterval(sharedIntervalId);
   };
 }
