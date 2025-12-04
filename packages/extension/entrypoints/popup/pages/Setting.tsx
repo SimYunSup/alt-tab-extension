@@ -103,7 +103,10 @@ export function Setting() {
   });
 
 
-  const handleCloseRulesChange = (field: keyof CloseRules, value: any) => {
+  const handleCloseRulesChange = <K extends keyof CloseRules>(
+    field: K,
+    value: CloseRules[K]
+  ) => {
     if (!settings) return;
     setSettings((prev) => ({
       ...prev,
@@ -150,7 +153,10 @@ export function Setting() {
     })
   }
 
-  const handleNewBlocklistItemChange = (field: string, value: any) => {
+  const handleNewBlocklistItemChange = (
+    field: 'url' | `rule.${keyof CloseRules}`,
+    value: string | number | boolean | InactiveType
+  ) => {
     if (field.startsWith("rule.")) {
       const ruleField = field.split(".")[1] as keyof typeof newBlocklistItem.rule
       setNewBlocklistItem({

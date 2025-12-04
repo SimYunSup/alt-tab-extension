@@ -1,11 +1,15 @@
 export type InactiveType = "window" | "visibility" | "idle";
 
 export interface CloseRules {
-  idleCondition: InactiveType; // 윈도우 바뀔 시 inactive, 탭이 안 보여지면 inactive, 요청이 없으면 inactive
-  idleTimeout: number; // inactive까지의 시간
-  ignoreUnloadedTab?: boolean; // unload되었어도 ignore
-  ignoreAudibleTab?: boolean; // play중이여도 종료
-  allowPinnedTab?: boolean; // pin할경우 ignore
+  idleCondition: InactiveType;
+  idleTimeout: number;
+  /** When true, don't close tabs that are unloaded/discarded */
+  ignoreUnloadedTab?: boolean;
+  /** When true, close tabs even if playing audio (ignores audible status) */
+  ignoreAudibleTab?: boolean;
+  /** When true, don't close pinned tabs */
+  allowPinnedTab?: boolean;
+  /** When true, don't close tabs in groups/containers */
   ignoreContainerTab?: boolean;
 }
 export interface Setting {

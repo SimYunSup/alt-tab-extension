@@ -13,6 +13,10 @@ export default defineConfig({
       build: {
         target: 'esnext',
       },
+      esbuild: env.mode === 'production' ? {
+        drop: ['console'],
+        pure: ['logger.debug', 'logger.info', 'logger.warn', 'logger.error', 'logger.trace', 'logger.log', 'logger.success'],
+      } : undefined,
     };
   },
   modules: [
@@ -45,8 +49,7 @@ export default defineConfig({
       },
       externally_connectable: {
         matches: [
-          import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173'
-          // Add your production domain here
+          import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173',
         ],
       },
       web_accessible_resources: [
@@ -58,7 +61,7 @@ export default defineConfig({
     };
     if (mode === "development") {
       if (browser === "chrome" || browser === "edge") {
-        (manifest as any).key = import.meta.env.VITE_MANIFEST_DEV_KEY;
+        (manifest as { key?: string }).key = import.meta.env.VITE_MANIFEST_DEV_KEY;
       }
     }
     if (browser === "firefox") {

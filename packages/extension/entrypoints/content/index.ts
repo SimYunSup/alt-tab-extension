@@ -11,7 +11,6 @@ function isWebAppPage() {
 
 export default defineContentScript({
   matches: ["http://*/*", "https://*/*"],
-  // registration: "manifest",
   async main() {
     allowWindowMessaging("background");
 

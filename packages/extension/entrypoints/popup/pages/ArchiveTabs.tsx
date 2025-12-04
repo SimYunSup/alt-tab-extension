@@ -1,5 +1,6 @@
 import React from "react";
 import { browser } from 'wxt/browser';
+import { toast } from "sonner";
 import { Button } from "@/entrypoints/components/ui/button";
 import { Login } from "@/entrypoints/components/Login";
 import { Badge } from "@/entrypoints/components/ui/badge";
@@ -61,7 +62,7 @@ export function ArchiveTabs() {
         setSelectedGroupId(null);
       }
     } else {
-      alert("탭 그룹 삭제에 실패했습니다.");
+      toast.error("탭 그룹 삭제에 실패했습니다.");
     }
   };
 
@@ -73,7 +74,7 @@ export function ArchiveTabs() {
       const shareUrl = await generateQRCode(groupId);
 
       if (!shareUrl) {
-        alert("공유 URL 생성에 실패했습니다.");
+        toast.error("공유 URL 생성에 실패했습니다.");
         return;
       }
 
@@ -89,7 +90,7 @@ export function ArchiveTabs() {
       });
     } catch (error) {
       console.error("QR code generation failed:", error);
-      alert("QR 코드 생성에 실패했습니다.");
+      toast.error("QR 코드 생성에 실패했습니다.");
     }
   };
 
@@ -113,7 +114,7 @@ export function ArchiveTabs() {
       setTimeout(() => setIsRestoring(false), 1000);
     } catch (error) {
       console.error("Failed to restore tabs:", error);
-      alert("탭 복원에 실패했습니다.");
+      toast.error("탭 복원에 실패했습니다.");
       setIsRestoring(false);
     }
   };

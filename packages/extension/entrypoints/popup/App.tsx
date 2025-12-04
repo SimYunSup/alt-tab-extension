@@ -5,6 +5,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/entrypoints/components/ui/tabs';
+import { Toaster } from '@/entrypoints/components/ui/sonner';
 import { CurrentTabs } from './pages/CurrentTabs';
 import { useToken } from './hooks/useStorageValue';
 
@@ -50,6 +51,7 @@ function App() {
         </TabsContent>
       </Tabs>
       <div id="portal-container" />
+      <Toaster position="top-center" />
     </div>
   );
 }
