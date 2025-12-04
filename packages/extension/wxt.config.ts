@@ -13,6 +13,10 @@ export default defineConfig({
       build: {
         target: 'esnext',
       },
+      esbuild: env.mode === 'production' ? {
+        drop: ['console'],
+        pure: ['logger.debug', 'logger.info', 'logger.warn', 'logger.error', 'logger.trace', 'logger.log', 'logger.success'],
+      } : undefined,
     };
   },
   modules: [
