@@ -49,7 +49,7 @@ export default defineConfig({
       },
       externally_connectable: {
         matches: [
-          import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173',
+          (import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173') + '/*',
         ],
       },
       web_accessible_resources: [

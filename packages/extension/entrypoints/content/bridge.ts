@@ -5,7 +5,7 @@ import { browser, defineContentScript } from "#imports";
 
 export default defineContentScript({
   matches: [
-    import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173',
+    (import.meta.env.VITE_WEB_APP_URL || 'http://localhost:5173') + '/*',
   ],
   main() {
     console.log("[Alt-Tab Bridge] Content script loaded");

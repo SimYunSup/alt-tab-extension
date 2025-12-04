@@ -143,14 +143,15 @@ export function Setting() {
     })
   }
 
-  const removeBlocklistItem = (index: number) => {
-    if (!settings) return;
-    const newBlocklist = { ...settings.whitelistUrls };
-    delete newBlocklist[index];
-    setSettings({
-      ...settings,
-      whitelistUrls: newBlocklist,
-    })
+  const removeBlocklistItem = (url: string) => {
+    setSettings((prev) => {
+      const newBlocklist = { ...prev.whitelistUrls };
+      delete newBlocklist[url];
+      return {
+        ...prev,
+        whitelistUrls: newBlocklist,
+      };
+    });
   }
 
   const handleNewBlocklistItemChange = (
@@ -516,10 +517,10 @@ export function Setting() {
                               </TableCell>
                             </TableRow>
                           ) : (
-                            Object.entries(_settings.whitelistUrls).map(([url, rule], index) => {
+                            Object.entries(_settings.whitelistUrls).map(([url, rule]) => {
                               const Icon = INACTIVE_TYPE_INFO[rule.idleCondition].icon;
                               return (
-                                <TableRow key={index} className="hover:bg-slate-50">
+                                <TableRow key={url} className="hover:bg-slate-50">
                                   <TableCell className="w-[100px]">
                                     <Tooltip>
                                       <TooltipTrigger className="w-[100px] text-xs font-medium text-ellipsis text-start overflow-hidden whitespace-nowrap">
@@ -596,7 +597,7 @@ export function Setting() {
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => removeBlocklistItem(index)}
+                                      onClick={() => removeBlocklistItem(url)}
                                       className="size-6 hover:bg-red-50"
                                       style={{ padding: 0 }}
                                     >
