@@ -42,37 +42,30 @@ export function setupInternalMessageHandlers(): void {
     const { tabIds, secret, salt } = message.data as { tabIds: number[]; secret: string; salt: string };
 
     if (!secret || !salt) {
-      logger.error('Secret and salt are required for tab group archiving');
-      return false;
+      throw new Error('Secret and salt are required for tab group archiving');
     }
 
-    try {
-      const tabs = await Promise.all(
-        tabIds.map(async (tabId) => {
-          try {
-            return await browser.tabs.get(tabId);
-          } catch {
-            return null;
-          }
-        })
-      );
+    const tabs = await Promise.all(
+      tabIds.map(async (tabId) => {
+        try {
+          return await browser.tabs.get(tabId);
+        } catch {
+          return null;
+        }
+      })
+    );
 
-      const validTabs = tabs.filter((tab): tab is Browser.tabs.Tab => tab !== null && tab.id !== undefined);
-      if (validTabs.length === 0) {
-        logger.error('No valid tabs found');
-        return false;
-      }
-
-      const tabInfos = await Promise.all(
-        validTabs.map((tab) => convertTabToServerFormat(tab, convertToClientTabInfo(tab)))
-      );
-
-      const result = await archiveTabGroup(tabInfos, secret, salt);
-      return !!result;
-    } catch (error) {
-      logger.error('Failed to archive tab group:', error);
-      return false;
+    const validTabs = tabs.filter((tab): tab is Browser.tabs.Tab => tab !== null && tab.id !== undefined);
+    if (validTabs.length === 0) {
+      throw new Error('No valid tabs found');
     }
+
+    const tabInfos = await Promise.all(
+      validTabs.map((tab) => convertTabToServerFormat(tab, convertToClientTabInfo(tab)))
+    );
+
+    const result = await archiveTabGroup(tabInfos, secret, salt);
+    return !!result;
   });
 }
 
@@ -82,9 +75,14 @@ export function setupInternalMessageHandlers(): void {
 export function setupRuntimeMessageHandlers(): void {
   browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'open_tab' && message.url) {
-      browser.tabs.create({ url: message.url })
-        .then((tab) => sendResponse({ success: true, tabId: tab.id }))
-        .catch((error) => sendResponse({ success: false, error: String(error) }));
+      (async () => {
+        try {
+          const tab = await browser.tabs.create({ url: message.url });
+          sendResponse({ success: true, tabId: tab.id });
+        } catch (error) {
+          sendResponse({ success: false, error: String(error) });
+        }
+      })();
       return true;
     }
 

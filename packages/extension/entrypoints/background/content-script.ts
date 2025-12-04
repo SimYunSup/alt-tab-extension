@@ -45,14 +45,15 @@ export async function injectContentScriptToExistingTabs(): Promise<void> {
 /**
  * Sets up chrome.storage.session access level for content scripts
  */
-export function setupStorageAccess(): void {
+export async function setupStorageAccess(): Promise<void> {
   if (typeof chrome !== 'undefined' && chrome.storage?.session?.setAccessLevel) {
-    chrome.storage.session.setAccessLevel({
-      accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS',
-    }).then(() => {
+    try {
+      await chrome.storage.session.setAccessLevel({
+        accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS',
+      });
       logger.debug('Storage session access level configured');
-    }).catch((error) => {
+    } catch (error) {
       logger.warn('Failed to set storage.session access level:', error);
-    });
+    }
   }
 }
