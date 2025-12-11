@@ -8,11 +8,15 @@
 
 [![License: MIT][license-image]][license-url]
 
+[한국어](./README.ko.md) | English
+
 ## Overview
 
 Alt-Tab is a browser extension and web application for intelligent tab management with cloud sync and secure sharing capabilities. It automatically detects and stores inactive tabs, keeping your workspace clean while allowing easy restoration across devices.
 
-This project is based on [Alt-Tab Server Repository](https://github.com/knight7024/alt-tab) by [knight7024](https://github.com/knight7024).
+**Repositories**
+- Frontend: [SimYunSup/alt-tab-extension](https://github.com/SimYunSup/alt-tab-extension)
+- Backend: [knight7024/alt-tab](https://github.com/knight7024/alt-tab)
 
 ## Monorepo Structure
 
@@ -26,15 +30,21 @@ This is a pnpm monorepo containing:
 ### Browser Extension
 
 - **Automatic Tab Management**
-  - Detects and stores tabs that have been inactive for a defined period
-  - Customizable timeout and inactivity detection modes
+  - Detects and stores tabs that have been inactive for a defined period (1-240 minutes)
+  - Multiple inactivity detection modes:
+    | Mode | Description | Support |
+    |------|-------------|---------|
+    | window | Inactive on window/tab switch | All browsers |
+    | visibility | Inactive when tab is hidden | All browsers |
+    | idle | Inactive when no user interaction | Chrome/Edge only |
+  - Tab protection options: ignore unloaded tabs, audio-playing tabs, pinned tabs, container/group tabs
 - **URL-Specific Rules**
   - Apply custom settings for specific websites using URL patterns
 - **Cloud Sync**
   - Sync settings and tabs across devices via Google OAuth
 - **Tab Archiving**
-  - Archive tab groups with end-to-end encryption (PIN-based)
-  - Share tab groups via QR code
+  - Archive tab groups with end-to-end encryption (PIN-based, Argon2id + AES-256-GCM)
+  - Share tab groups via QR code for cross-device restoration
 
 ### Web Application
 
@@ -144,6 +154,23 @@ VITE_API_BASE_URL=http://localhost:8080
 # VITE_API_BASE_URL=https://your-backend-domain.com
 ```
 
+## Tech Stack
+
+### Extension
+- **Framework**: WXT (Browser extension framework)
+- **UI**: React, Tailwind CSS, Radix UI, Lucide React
+- **Data**: Dexie (IndexedDB), webext-bridge (messaging)
+- **Security**: hash-wasm (Argon2id), Web Crypto API (AES-256-GCM)
+- **Language**: TypeScript
+
+### Web App
+- **Framework**: Vite, React
+- **UI**: Tailwind CSS, Radix UI
+
+### Supported Browsers
+- Chrome / Edge (Manifest V3)
+- Firefox (Manifest V2)
+
 ## Architecture
 
 ### Tab Sharing Flow
@@ -170,9 +197,20 @@ Web app communicates with extension using:
 
 Contributions are welcome! Please feel free to submit issues and pull requests.
 
+## Documentation
+
+- [Technical Documentation (Korean)](./docs/README.md) - Detailed architecture and API reference
+- [E2EE Architecture (Korean)](./docs/E2EE-ARCHITECTURE.md) - End-to-end encryption design
+
 ## License
 
 [MIT](LICENSE.md)
+
+## References
+
+- [WXT Framework](https://wxt.dev/)
+- [Chrome Extensions API](https://developer.chrome.com/docs/extensions/)
+- [Firefox WebExtensions](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions)
 
 [license-image]: https://img.shields.io/badge/License-MIT-brightgreen.svg?style=flat-square
 [license-url]: https://opensource.org/licenses/MIT
