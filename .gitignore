@@ -29,3 +29,6 @@ packages/extension/public/web
 .env*
 !.env.example
 .env
+
+# Sisyphus planning files
+.sisyphus
