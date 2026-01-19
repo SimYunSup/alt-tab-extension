@@ -1,26 +1,31 @@
 /**
  * Message handling module
- * Handles internal and external messages
+ * Handles internal, runtime, and external messages
  */
 
 import type { Browser } from 'wxt/browser';
 import { browser } from 'wxt/browser';
 import { onMessage } from 'webext-bridge/background';
 import { createLogger } from '@alt-tab/shared/logger';
-import { currentTabStorage, accessTokenStorage } from '@/utils/storage';
+import { currentTabStorage } from '@/utils/storage';
 import { convertToClientTabInfo } from '@/utils/Tab';
 import { archiveTabGroup } from '@/utils/ArchivedTabGroup';
-import { restoreTabWithData } from './tab-restore';
+import { BRIDGE_MESSAGES, RUNTIME_MESSAGES, EXTERNAL_MESSAGES } from '@/utils/message-types';
+import { successResponse, errorResponse, createAsyncHandler } from '@/utils/message-response';
+import { handleRestoreTabs } from './handlers/restore-tabs-handler';
 import { convertTabToServerFormat } from './tab-converter';
-import type { RestoredTabInfo } from './types';
+import type { RuntimeMessage, ExternalMessage } from './types';
 
 const logger = createLogger('Messaging');
+const EXTENSION_VERSION = '0.0.1';
+
+// ========== Internal Message Handlers (webext-bridge) ==========
 
 /**
  * Sets up internal message handlers (webext-bridge)
  */
 export function setupInternalMessageHandlers(): void {
-  onMessage('refresh-tab', async (message) => {
+  onMessage(BRIDGE_MESSAGES.REFRESH_TAB, async (message) => {
     const { tabId } = message.data;
     try {
       const tab = await browser.tabs.get(tabId);
@@ -38,7 +43,7 @@ export function setupInternalMessageHandlers(): void {
     }
   });
 
-  onMessage('send-tab-group', async (message) => {
+  onMessage(BRIDGE_MESSAGES.SEND_TAB_GROUP, async (message) => {
     const { tabIds, secret, salt } = message.data as { tabIds: number[]; secret: string; salt: string };
 
     if (!secret || !salt) {
@@ -69,100 +74,89 @@ export function setupInternalMessageHandlers(): void {
   });
 }
 
+// ========== Runtime Message Handlers (from content scripts) ==========
+
 /**
  * Sets up runtime message handlers (from content scripts)
  */
 export function setupRuntimeMessageHandlers(): void {
-  browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.type === 'open_tab' && message.url) {
-      (async () => {
-        try {
-          const tab = await browser.tabs.create({ url: message.url });
-          sendResponse({ success: true, tabId: tab.id });
-        } catch (error) {
-          sendResponse({ success: false, error: String(error) });
+  browser.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
+    switch (message.type) {
+      case RUNTIME_MESSAGES.OPEN_TAB:
+        if (message.url) {
+          createAsyncHandler(
+            async () => {
+              const tab = await browser.tabs.create({ url: message.url });
+              return { tabId: tab.id };
+            },
+            sendResponse
+          );
+          return true;
         }
-      })();
-      return true;
-    }
+        break;
 
-    if (message.type === 'restore_tabs' && message.tabs) {
-      (async () => {
-        try {
-          for (const tab of message.tabs) {
-            await restoreTabWithData(tab);
-          }
-          sendResponse({ success: true, count: message.tabs.length });
-        } catch (error) {
-          logger.error('Failed to restore tabs:', error);
-          sendResponse({ success: false, error: String(error) });
-        }
-      })();
-      return true;
+      case RUNTIME_MESSAGES.RESTORE_TABS:
+        createAsyncHandler(
+          () => handleRestoreTabs(message.tabs),
+          sendResponse
+        );
+        return true;
     }
 
     return false;
   });
 }
 
+// ========== External Message Handlers (from web app) ==========
+
 /**
  * Sets up external message handlers (from web app)
  */
 export function setupExternalMessageHandlers(): void {
   browser.runtime.onMessageExternal.addListener(
-    (message: { type: string; tabs?: RestoredTabInfo[]; search?: string; path?: string }, _sender, sendResponse) => {
+    (message: ExternalMessage, _sender, sendResponse) => {
       switch (message.type) {
-        case 'ping':
-          sendResponse({ success: true, version: '0.0.1' });
+        case EXTERNAL_MESSAGES.PING:
+          sendResponse(successResponse({ version: EXTENSION_VERSION }));
           return true;
 
-        case 'open_settings': {
+        case EXTERNAL_MESSAGES.OPEN_SETTINGS: {
           const settingsUrl = browser.runtime.getURL('/popup.html') + '#/page/settings';
           browser.tabs.create({ url: settingsUrl });
-          sendResponse({ success: true, url: settingsUrl });
+          sendResponse(successResponse({ url: settingsUrl }));
           return true;
         }
 
-        case 'get_extension_url': {
+        case EXTERNAL_MESSAGES.GET_EXTENSION_URL: {
           const baseUrl = browser.runtime.getURL('/');
-          sendResponse({ success: true, url: baseUrl });
+          sendResponse(successResponse({ url: baseUrl }));
           return true;
         }
 
-        case 'get_redirect_url': {
+        case EXTERNAL_MESSAGES.GET_REDIRECT_URL: {
           const search = message.search || '';
           const redirectUrl = browser.runtime.getURL('/web/index.html') + search;
-          sendResponse({ success: true, url: redirectUrl });
+          sendResponse(successResponse({ url: redirectUrl }));
           return true;
         }
 
-        case 'open_web': {
+        case EXTERNAL_MESSAGES.OPEN_WEB: {
           const path = message.path || '';
           const webUrl = browser.runtime.getURL('/web/index.html') + path;
           browser.tabs.create({ url: webUrl });
-          sendResponse({ success: true, url: webUrl });
+          sendResponse(successResponse({ url: webUrl }));
           return true;
         }
 
-        case 'restore_tabs':
-          if (message.tabs) {
-            (async () => {
-              try {
-                for (const tab of message.tabs!) {
-                  await restoreTabWithData(tab);
-                }
-                sendResponse({ success: true, count: message.tabs!.length });
-              } catch (error) {
-                logger.error('Failed to restore tabs:', error);
-                sendResponse({ success: false, error: String(error) });
-              }
-            })();
-            return true;
-          }
-          break;
+        case EXTERNAL_MESSAGES.RESTORE_TABS:
+          createAsyncHandler(
+            () => handleRestoreTabs(message.tabs),
+            sendResponse
+          );
+          return true;
       }
 
-      sendResponse({ success: false, error: 'Unknown message type' });
+      sendResponse(errorResponse('Unknown message type'));
       return true;
     }
   );
