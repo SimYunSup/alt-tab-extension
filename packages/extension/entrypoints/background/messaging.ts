@@ -83,7 +83,7 @@ export function setupRuntimeMessageHandlers(): void {
   browser.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
     switch (message.type) {
       case RUNTIME_MESSAGES.OPEN_TAB:
-        if ('url' in message && message.url) {
+        if (message.url) {
           createAsyncHandler(
             async () => {
               const tab = await browser.tabs.create({ url: message.url });
@@ -96,14 +96,11 @@ export function setupRuntimeMessageHandlers(): void {
         break;
 
       case RUNTIME_MESSAGES.RESTORE_TABS:
-        if ('tabs' in message && message.tabs) {
-          createAsyncHandler(
-            () => handleRestoreTabs(message.tabs),
-            sendResponse
-          );
-          return true;
-        }
-        break;
+        createAsyncHandler(
+          () => handleRestoreTabs(message.tabs),
+          sendResponse
+        );
+        return true;
     }
 
     return false;
@@ -137,14 +134,14 @@ export function setupExternalMessageHandlers(): void {
         }
 
         case EXTERNAL_MESSAGES.GET_REDIRECT_URL: {
-          const search = ('search' in message ? message.search : '') || '';
+          const search = message.search || '';
           const redirectUrl = browser.runtime.getURL('/web/index.html') + search;
           sendResponse(successResponse({ url: redirectUrl }));
           return true;
         }
 
         case EXTERNAL_MESSAGES.OPEN_WEB: {
-          const path = ('path' in message ? message.path : '') || '';
+          const path = message.path || '';
           const webUrl = browser.runtime.getURL('/web/index.html') + path;
           browser.tabs.create({ url: webUrl });
           sendResponse(successResponse({ url: webUrl }));
@@ -152,14 +149,11 @@ export function setupExternalMessageHandlers(): void {
         }
 
         case EXTERNAL_MESSAGES.RESTORE_TABS:
-          if ('tabs' in message && message.tabs) {
-            createAsyncHandler(
-              () => handleRestoreTabs(message.tabs),
-              sendResponse
-            );
-            return true;
-          }
-          break;
+          createAsyncHandler(
+            () => handleRestoreTabs(message.tabs),
+            sendResponse
+          );
+          return true;
       }
 
       sendResponse(errorResponse('Unknown message type'));

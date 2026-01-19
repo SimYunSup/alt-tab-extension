@@ -19,9 +19,15 @@ export interface RestoreTabsResult {
 export async function handleRestoreTabs(tabs: RestoredTabInfo[]): Promise<RestoreTabsResult> {
   logger.info(`Restoring ${tabs.length} tabs`);
 
+  let restoredCount = 0;
   for (const tab of tabs) {
-    await restoreTabWithData(tab);
+    try {
+      await restoreTabWithData(tab);
+      restoredCount++;
+    } catch (error) {
+      logger.error(`Failed to restore tab: ${tab.url}`, error);
+    }
   }
 
-  return { count: tabs.length };
+  return { count: restoredCount };
 }
